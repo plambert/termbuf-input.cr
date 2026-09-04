@@ -1,0 +1,23 @@
+name: termbuf-input
+version: 0.1.0
+
+authors:
+  - Paul M. Lambert <plambert@plambert.net>
+
+crystal: '>= 1.21'
+
+license: MIT
+
+description: |
+  Bytes and signals from a terminal turned into events: keys, paste, mouse,
+  timers, signals, and registered reply patterns. Knows nothing about screens
+  or capabilities.
+
+# None. Nothing outside the standard library is needed to read a terminal, so
+# depending on this shard pulls in nothing else.
+dependencies: {}
+
+development_dependencies:
+  spectator:
+    gitlab: arctic-fox/spectator
+    version: "~> 0.11"
