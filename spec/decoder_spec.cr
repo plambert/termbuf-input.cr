@@ -366,10 +366,12 @@ Spectator.describe TermBuf::Input::Decoder do
     end
 
     # Slow and stopped are different, and the only evidence either way is
-    # whether anything is still arriving.
+    # whether anything is still arriving. The stall is set far above the
+    # pause between chunks so that a loaded CI runner oversleeping by tens of
+    # milliseconds cannot turn a slow paste into a stopped one.
     it "keeps a slow paste alive while bytes keep coming" do
       decoder = TermBuf::Input::Decoder.new
-      decoder.paste_stall = 60.milliseconds
+      decoder.paste_stall = 500.milliseconds
       decode "\e[200~one ", decoder
 
       3.times do
