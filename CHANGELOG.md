@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- `Stream#stages` is a `Stages`, a mutex-guarded list with `#push`, `#replace` and a snapshotting
+  `#each`, in place of an array that had to be copied and reassigned. `Stream#stages=` is gone;
+  what assigned a chain now calls `#replace`.
+
 - The README maps the public API and opens with a program that compiles, and the doc comments no
   longer name things that live in termbuf rather than here.
 

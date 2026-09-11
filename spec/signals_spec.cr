@@ -410,7 +410,7 @@ Spectator.describe TermBuf::Input::Stream do
       with_wired do |wired|
         seen = Channel(::Signal).new 4
 
-        wired.stream.stages = [TermBuf::Input::Stage.new(:watch,
+        wired.stream.stages.replace [TermBuf::Input::Stage.new(:watch,
           ->(event : TermBuf::Input::Event, emit : Proc(TermBuf::Input::Event, Nil)) do
             if signal = event.as? TermBuf::Input::Events::Signal
               seen.send signal.signal
@@ -435,7 +435,7 @@ Spectator.describe TermBuf::Input::Stream do
 
     it "delivers whatever the stage made of it instead" do
       with_wired do |wired|
-        wired.stream.stages = [TermBuf::Input::Stage.new(:rename,
+        wired.stream.stages.replace [TermBuf::Input::Stage.new(:rename,
           ->(event : TermBuf::Input::Event, emit : Proc(TermBuf::Input::Event, Nil)) do
             if signal = event.as? TermBuf::Input::Events::Signal
               emit.call TermBuf::Input::Events::Warning.new(

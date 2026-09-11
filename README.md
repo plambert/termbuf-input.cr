@@ -105,7 +105,7 @@ event reaches the channel it walks the `#stages` chain.
 | `#events` | `Channel(Event)`, 256 deep. Once it fills, decoding stops and then reading does |
 | `#after(span)`, `#cancel(nonce)` | A timer, in order with the bytes around it |
 | `#inject(event)` | Sends an event without decoding anything, and without the stages |
-| `#stages`, `#stages=` | The chain every decoded event walks |
+| `#stages` | The chain every decoded event walks, a `Stages` |
 | `#patterns`, `#decoder`, `#timers`, `#signals` | The pieces, for registering and for tuning |
 | `#close` | Stops delivering, resets the signal traps, disarms the timers |
 
@@ -238,13 +238,20 @@ handler = ->(event : Input::Event, emit : Proc(Input::Event, Nil)) do
   emit.call event
 end
 
-stream.stages = stream.stages.dup.tap &.push(Input::Stage.new(:drop_motion, handler))
+stream.stages.push Input::Stage.new(:drop_motion, handler)
 ```
 
-The chain is empty by default. The array is swapped rather than mutated, as above: the dispatcher
-takes a reference to it once per event, so mutating the one `#stages` returns is a race. termbuf
-answers `SIGWINCH` in a stage called `:resize`, which consumes the signal and sends a resize event
-in its place. `#inject` bypasses the chain.
+The chain is empty by default. `Stages` guards itself with a mutex: `#push` and `#replace` change it
+from any fibre, and `#each` and what `Enumerable` builds on it (`#map`, `#find`, `#to_a`) see a copy
+taken when the call began. An event part way through the chain when it changes finishes on the
+chain it started on. Removing or reordering is a `#replace`:
+
+```crystal
+stream.stages.replace stream.stages.reject { |stage| stage.name == :drop_motion }
+```
+
+termbuf answers `SIGWINCH` in a stage called `:resize`, which consumes the signal and sends a
+resize event in its place. `#inject` bypasses the chain.
 
 ## Decoding without a device
 

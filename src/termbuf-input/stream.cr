@@ -5,6 +5,7 @@ require "./patterns"
 require "./reader"
 require "./signals"
 require "./stage"
+require "./stages"
 require "./timers"
 
 module TermBuf
@@ -70,7 +71,7 @@ module TermBuf
       @deadline_at : Time::Instant? = nil
 
       # What every event walks before the application sees it. See `#stages`.
-      @stages : Array(Stage) = [] of Stage
+      @stages : Stages = Stages.new
 
       # Builds a stream over *io*, which nothing is read from until `#start`.
       #
@@ -160,34 +161,20 @@ module TermBuf
         # Nobody is listening any more.
       end
 
-      # The chain every event walks on its way to the application.
+      # The chain every event walks on its way to the application. See
+      # `Stages` for how it is changed and why that is safe while events are
+      # flowing.
       #
-      # Empty by default, which is the useful default: with nothing in it every
-      # event goes to the channel as it was made. A driver puts its own
-      # translations here — termbuf answers `SIGWINCH` in a stage called
-      # `:resize`, which consumes the signal and sends a resize event in its
-      # place — and an application adds, removes or reorders them.
+      # Empty by default. A driver puts its own translations here — termbuf
+      # answers `SIGWINCH` in a stage called `:resize`, which consumes the
+      # signal and sends a resize event in its place — and an application
+      # adds, removes or reorders them:
       #
-      # The array is swapped rather than mutated: the dispatcher takes a
-      # reference to it once per event and walks that, so a chain replaced
-      # while an event is half way through it finishes on the chain it started
-      # on and the next event uses the new one. Which means reordering is
-      # assigning a new array, and mutating the one this returns is a race:
-      #
-      #     stream.stages = stream.stages.dup.tap do |chain|
-      #       chain.unshift my_stage
-      #     end
+      #     stream.stages.push my_stage
       #
       # `#inject` bypasses the chain entirely, since what the driver has to say
       # on its own account is not something a filter should be able to swallow.
-      def stages : Array(Stage)
-        @stages
-      end
-
-      # :ditto:
-      def stages=(stages : Array(Stage)) : Array(Stage)
-        @stages = stages
-      end
+      getter stages : Stages
 
       # Stops delivering events.
       #
@@ -253,11 +240,11 @@ module TermBuf
 
       # Walks *event* through the stages and sends whatever comes out.
       #
-      # The chain is read once, here, and handed down: an event that is part
-      # way through when the application swaps the array finishes on the chain
-      # it started on rather than half on each.
+      # The chain is copied once, here, and handed down: an event that is part
+      # way through when the application changes the chain finishes on the
+      # chain it started on rather than half on each.
       private def deliver(event : Event) : Nil
-        stages = @stages
+        stages = @stages.to_a
         return inject event if stages.empty?
 
         advance stages, 0, event

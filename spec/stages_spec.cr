@@ -93,7 +93,7 @@ Spectator.describe TermBuf::Input::Stage do
 
   it "passes an event a stage emits unchanged" do
     with_keyboard do |keyboard|
-      keyboard.stream.stages = [stage(:pass) { |event, emit| emit.call event }]
+      keyboard.stream.stages.replace [stage(:pass) { |event, emit| emit.call event }]
 
       keyboard.type "a"
       event = keyboard.event
@@ -111,7 +111,7 @@ Spectator.describe TermBuf::Input::Stage do
         emit.call event unless event.is_a? TermBuf::Input::Events::Key
       end
 
-      keyboard.stream.stages = [swallow]
+      keyboard.stream.stages.replace [swallow]
 
       keyboard.type "abc"
       keyboard.stream.inject TermBuf::Input::Events::Warning.new("still here")
@@ -129,7 +129,7 @@ Spectator.describe TermBuf::Input::Stage do
         emit.call TermBuf::Input::Events::Warning.new("typed #{key.key.char}")
       end
 
-      keyboard.stream.stages = [rename]
+      keyboard.stream.stages.replace [rename]
 
       keyboard.type "z"
       expect(said(keyboard.event)).to eq "typed z"
@@ -147,7 +147,7 @@ Spectator.describe TermBuf::Input::Stage do
         emit.call TermBuf::Input::Events::Warning.new("after")
       end
 
-      keyboard.stream.stages = [twice]
+      keyboard.stream.stages.replace [twice]
 
       keyboard.type "q"
 
@@ -161,7 +161,7 @@ Spectator.describe TermBuf::Input::Stage do
   # swallow it — including one that swallows everything.
   it "leaves an injected event alone" do
     with_keyboard do |keyboard|
-      keyboard.stream.stages = [stage(:nothing) { |_event, _emit| }]
+      keyboard.stream.stages.replace [stage(:nothing) { |_event, _emit| }]
 
       keyboard.stream.inject TermBuf::Input::Events::Warning.new("straight past")
       expect(said(keyboard.event)).to eq "straight past"
@@ -171,7 +171,7 @@ Spectator.describe TermBuf::Input::Stage do
   describe "order" do
     it "runs the stages in the order the array has them" do
       with_keyboard do |keyboard|
-        keyboard.stream.stages = [naming, shouting]
+        keyboard.stream.stages.replace [naming, shouting]
 
         keyboard.type "k"
         expect(said(keyboard.event)).to eq "typed k!"
@@ -180,7 +180,7 @@ Spectator.describe TermBuf::Input::Stage do
 
     it "gives a different answer when the array is reordered" do
       with_keyboard do |keyboard|
-        keyboard.stream.stages = [shouting, naming]
+        keyboard.stream.stages.replace [shouting, naming]
 
         keyboard.type "k"
         expect(said(keyboard.event)).to eq "typed k"
@@ -200,7 +200,7 @@ Spectator.describe TermBuf::Input::Stage do
       end
 
       swapping = stage(:swapping) do |event, emit|
-        stream.stages = [replacement]
+        stream.stages.replace [replacement]
         emit.call event
       end
 
@@ -208,7 +208,7 @@ Spectator.describe TermBuf::Input::Stage do
         emit.call TermBuf::Input::Events::Warning.new("original still ran for #{event.class}")
       end
 
-      stream.stages = [swapping, original]
+      stream.stages.replace [swapping, original]
 
       keyboard.type "a"
       expect(said(keyboard.event))
