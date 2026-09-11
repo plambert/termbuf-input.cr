@@ -42,6 +42,10 @@ module TermBuf
 
       @context : Fiber::ExecutionContext::Isolated?
 
+      # Builds a reader over *io*, which is not read from until `#start`.
+      #
+      # *blocking* says whether a read on *io* blocks the thread it runs on,
+      # which is what decides where `#start` puts the loop. See `#start`.
       def initialize(@io : IO, @blocking : Bool)
         @inbound = Channel(Inbound).new CAPACITY
       end

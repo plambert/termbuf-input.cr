@@ -59,9 +59,9 @@ module TermBuf::Input
     # coordinates the terminal sends, so they can be handed to a buffer's hit
     # test as they stand.
     #
-    # These arrive only once the application has turned reporting on:
-    #
-    #     terminal.enable TermBuf::Tty::MOUSE_SGR
+    # These arrive only once the application has turned reporting on, which is
+    # `CSI ? 1000 ; 1006 h` at its shortest — whatever mode set the application
+    # wants, sent through whatever its driver offers.
     #
     # Nothing enables it for the application, because a terminal reporting the
     # mouse is one that no longer lets the person select text with it, and that
@@ -96,8 +96,9 @@ module TermBuf::Input
     #
     # Only for the signals whose mode is `Input::Signals::Mode::Event` or
     # `WarnThenExit`; the ones that mean "stop" restore the terminal and re-
-    # raise themselves without ever reaching a channel, and `SIGWINCH` is
-    # consumed by the driver, which answers it with a resize event of its own.
+    # raise themselves without ever reaching a channel. `SIGWINCH` is an event
+    # by default and arrives like any other, unless a stage takes it: termbuf's
+    # `:resize` consumes it and sends a resize event of its own in its place.
     #
     # *count* is how many of this signal have arrived since the count was last
     # cleared, counting from one. Under `WarnThenExit` it is what the warning
@@ -107,8 +108,12 @@ module TermBuf::Input
       include Event
     end
 
-    # Something was wrong but not worth stopping for — a capability override
-    # naming something unknown, most likely.
+    # Something was wrong but not worth stopping for.
+    #
+    # Nothing in this shard sends one: it is here so that a driver and the
+    # application have somewhere to say so, through `Stream#inject` or out of a
+    # pattern or a stage. termbuf uses it for a capability override naming
+    # something unknown.
     #
     # These never go to stderr. The screen belongs to the application, and
     # writing to it from underneath would corrupt the display.
@@ -117,6 +122,9 @@ module TermBuf::Input
     end
 
     # Something failed. The driver keeps going; the application decides.
+    #
+    # Sent by whoever failed, the same way as `Warning`. Nothing in this shard
+    # sends one — a read that ends is `Closed`, not a failure.
     record Failure, error : Exception do
       include Event
     end

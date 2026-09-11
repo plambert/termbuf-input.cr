@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The README maps the public API and opens with a program that compiles, and the doc comments no
+  longer name things that live in termbuf rather than here.
+
 ## [0.1.0] - 2026-09-04
 
 ### Added
@@ -26,4 +33,5 @@ All notable changes to this project are documented here. The format follows
   for them from the moment it is built; turning the reporting on belongs to whoever set the
   terminal up.
 
+[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/plambert/termbuf-input.cr/releases/tag/v0.1.0

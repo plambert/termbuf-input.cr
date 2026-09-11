@@ -4,12 +4,19 @@ module TermBuf
     # Splits a stream of bytes arriving from the terminal into complete escape
     # sequences and everything else.
     #
-    # The prober needs this to tell a reply to its own query from a keystroke
-    # that happened to arrive at the same moment, and the input decoder needs the
-    # same split for the same reason. Bytes that do not form a complete sequence
-    # yet are held back rather than guessed at.
+    # Anything waiting on a reply to a query it made needs this to tell that
+    # reply from a keystroke that happened to arrive at the same moment, and
+    # `Decoder` needs the same split for the same reason. Bytes that do not form
+    # a complete sequence yet are held back rather than guessed at.
+    #
+    # `#feed` yields each chunk it can classify; whatever is left over is
+    # `#pending` and is put in front of the next chunk fed in. `#flush` gives up
+    # on what is held and yields it as text, which is what a timeout means.
     class SequenceScanner
+      # The escape byte every sequence begins with.
       ESC = 0x1B_u8
+
+      # The bell, which is one of the two things that can end an OSC string.
       BEL = 0x07_u8
 
       # What a chunk of bytes looks like, which is all that can be told from the

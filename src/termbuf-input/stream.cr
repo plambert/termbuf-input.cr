@@ -72,6 +72,15 @@ module TermBuf
       # What every event walks before the application sees it. See `#stages`.
       @stages : Array(Stage) = [] of Stage
 
+      # Builds a stream over *io*, which nothing is read from until `#start`.
+      #
+      # *blocking* says whether a read on *io* blocks the thread it runs on. A
+      # terminal does, and is given an execution context to itself so that the
+      # read cannot stall the fibres around it; an `IO::Memory` or a pipe the
+      # event loop can wait on does not, and is read from a fibre.
+      #
+      # The SGR mouse pattern is registered here, so a report is understood
+      # from this moment whether or not this shard asked for the reporting.
       def initialize(io : IO, blocking : Bool)
         @reader = Reader.new io, blocking
         @events = Channel(Event).new CAPACITY

@@ -55,8 +55,12 @@ module TermBuf::Input
     # already passed would otherwise become a zero or negative timeout.
     MINIMUM_DEADLINE = 1.millisecond
 
+    # The bracketed paste markers. Everything between them is text that was on
+    # the clipboard, delivered as one `Events::Paste` rather than as keys.
     PASTE_START = "\e[200~".to_slice
-    PASTE_END   = "\e[201~".to_slice
+
+    # :ditto:
+    PASTE_END = "\e[201~".to_slice
 
     # See `ESCAPE_TIMEOUT`. Worth raising over a slow link, where a sequence can
     # take longer than that to arrive in full.
@@ -108,6 +112,9 @@ module TermBuf::Input
     getter? pasting : Bool
 
     # Feeds bytes in, yielding whatever they completed.
+    #
+    # Whatever they did not complete is held, and the caller owes it a deadline:
+    # see `#read_deadline` and `#tick`.
     def feed(bytes : Bytes, &emit : Event ->) : Nil
       @scanner.feed(bytes) { |kind, chunk| dispatch kind, chunk, emit }
       mark_pending
@@ -343,7 +350,12 @@ module TermBuf::Input
 
     # ---------------------------------------------------------- sequences
 
-    # What one complete escape sequence means.
+    # What one complete escape sequence means, as a key.
+    #
+    # Anything it cannot name is `Key::Name::Unknown`, including the reports
+    # that are not keys at all: an application that knows better than this
+    # reads the bytes on the `Events::Key`, or registers a `Pattern` and never
+    # gets here.
     def decode(bytes : Bytes) : Key
       return Key.named Key::Name::Escape if bytes.size <= 1
 
@@ -374,6 +386,8 @@ module TermBuf::Input
       name ? Key.named(name) : Key.named(Key::Name::Unknown)
     end
 
+    # The keys `ESC O x` can name: the arrows, the first four function keys,
+    # and the keypad's own enter.
     SS3_KEYS = {
       'A' => Key::Name::Up, 'B' => Key::Name::Down,
       'C' => Key::Name::Right, 'D' => Key::Name::Left,
