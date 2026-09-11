@@ -40,6 +40,14 @@ Spectator.describe TermBuf::Input::Stages do
     expect(stages.map(&.name)).to eq [:first, :added_meanwhile]
   end
 
+  it "keeps its own copy of what it was given" do
+    stages = TermBuf::Input::Stages.new
+    given = [stage(:given)]
+    stages.replace given
+    given.clear
+    expect(stages.size).to eq 1
+  end
+
   it "hands out an array nobody else holds" do
     stages = TermBuf::Input::Stages.new
     stages.push stage(:only)

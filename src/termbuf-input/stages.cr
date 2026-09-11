@@ -9,8 +9,8 @@ module TermBuf
     # Every read takes a copy of the list under a mutex and works on that, so
     # an event part way through the chain when it changes finishes on the
     # chain it started on, and the next event uses the new one. Every write
-    # happens under the same mutex, so two fibres adding a stage at once both
-    # get theirs in. `#each` and everything `Enumerable` builds on it (`#map`,
+    # happens under the same mutex, and since no copy leaves it and no array
+    # given to it is kept, the list itself is only ever touched under the lock. `#each` and everything `Enumerable` builds on it (`#map`,
     # `#find`, `#to_a`, `#empty?`, `#size`) see one such copy; the block may
     # change the chain without deadlocking.
     #
@@ -37,7 +37,7 @@ module TermBuf
 
       # Adds *stage* at the end of the chain.
       def push(stage : Stage) : self
-        @mutex.synchronize { @list = @list.dup << stage }
+        @mutex.synchronize { @list << stage }
         self
       end
 
@@ -48,7 +48,7 @@ module TermBuf
 
       # Makes *stages*, in that order, the whole chain.
       def replace(stages : Enumerable(Stage)) : self
-        @mutex.synchronize { @list = stages.to_a }
+        @mutex.synchronize { @list = Array(Stage).new.concat stages }
         self
       end
 
