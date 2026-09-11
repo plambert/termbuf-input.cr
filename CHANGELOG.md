@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-11
+
 ### Changed
 
 - `Stream#stages` is a `Stages`, a mutex-guarded list with `#push`, `#replace` and a snapshotting
@@ -37,5 +39,6 @@ All notable changes to this project are documented here. The format follows
   for them from the moment it is built; turning the reporting on belongs to whoever set the
   terminal up.
 
-[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.1.0...v0.5.0
 [0.1.0]: https://github.com/plambert/termbuf-input.cr/releases/tag/v0.1.0
