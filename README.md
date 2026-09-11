@@ -13,6 +13,13 @@ termbuf depends on this shard; everything under `TermBuf::Input` lives here, and
 
 Requires Crystal 1.21 or later.
 
+## Related shards
+
+* **[plambert/termbuf.cr](https://github.com/plambert/termbuf.cr)** — the screen: a cell buffer,
+  capability detection, and a diffed repaint to the terminal
+* **[plambert/termbuf-widgets.cr](https://github.com/plambert/termbuf-widgets.cr)** — layout, focus,
+  keymaps, and widgets such as fields, lists, tables and overlays, drawn through termbuf
+
 ## Getting started
 
 Add the dependency to `shard.yml` and run `shards install`:
