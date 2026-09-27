@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-27
+
 ### Added
 
 - `Events::Focus` and `Input::Focus`, decoding the `CSI I` and `CSI O` focus reports of DEC mode
@@ -26,7 +28,9 @@ All notable changes to this project are documented here. The format follows
   mode, so no reply lands on the shell's command line.
 - `Input::Replies`, the parsers for those answers, usable on sequences read without a stream.
 - `Input::Claimed`, which a pattern returns to keep a sequence and deliver nothing.
-- `examples/queries.cr` and `examples/events.cr`, for trying all of it on a real terminal.
+- `examples/queries.cr` and `examples/checklist.cr`, which test a terminal, say what should happen,
+  and write a report; `examples/events.cr`, which prints every event with the modes toggled from
+  the keyboard.
 
 ## [0.5.0] - 2026-09-11
 
@@ -61,6 +65,7 @@ All notable changes to this project are documented here. The format follows
   for them from the moment it is built; turning the reporting on belongs to whoever set the
   terminal up.
 
-[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.1.0...v0.5.0
 [0.1.0]: https://github.com/plambert/termbuf-input.cr/releases/tag/v0.1.0
