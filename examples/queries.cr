@@ -164,7 +164,9 @@ begin
     elsif answer.is_a?(Input::Events::ModeReport)
       harness.record Status::Unsupported, name, answer.state.to_s
     else
-      harness.no_answer name, "no answer to DECRQM"
+      # Silence says nothing about support: Terminal.app answers no DECRQM
+      # and still has focus and SGR mouse reports.
+      harness.record Status::Info, name, "no answer to DECRQM, which says nothing about support"
     end
   end
 

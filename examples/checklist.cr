@@ -129,9 +129,20 @@ harness = Harness.new "checklist"
 list = Checklist.new harness
 stopped = false
 
-def supported?(harness : Harness, number : Int32) : Bool
+# Whether the terminal says it supports DEC mode *number*, or `nil` when it
+# does not answer. Terminal.app answers no DECRQM at all and still supports
+# focus and SGR mouse reports, so silence rules nothing out.
+def support(harness : Harness, number : Int32) : Bool?
   answer = harness.ask Input::Query.mode(number)
-  answer.is_a?(Input::Events::ModeReport) && answer.state.supported?
+  answer.state.supported? if answer.is_a?(Input::Events::ModeReport)
+end
+
+# What a step records when nothing arrives: a failure where the terminal said
+# it supports the mode, and unsupported where it said nothing.
+def quiet(known : Bool?) : -> Verdict
+  return Checklist::NOTHING if known
+
+  -> { {Status::Unsupported, "nothing arrived, and the terminal did not say whether it supports this"} }
 end
 
 # A key an unconfigured Option key sends on a Mac: a character, not Alt.
@@ -142,9 +153,9 @@ end
 begin
   harness.enter_alternate
 
-  focus = supported? harness, 1004
-  mouse = supported? harness, 1006
-  any_motion = supported? harness, 1003
+  focus = support harness, 1004
+  mouse = support harness, 1006
+  any_motion = support harness, 1003
   kitty = harness.ask(Input::Query::KITTY_KEYBOARD).is_a?(Input::Events::KittyKeyboard)
 
   # ------------------------------------------------------------------ keys
@@ -194,11 +205,11 @@ begin
 
   # ----------------------------------------------------------------- focus
 
-  if focus
+  if focus != false
     harness.modes.enable Input::Mode::FOCUS_EVENTS
     lost = false
     list.step "focus", "Switch to another window (Cmd+Tab), then come back to this one.",
-      "focus lost, then focus gained" do |event|
+      "focus lost, then focus gained", quiet: quiet(focus) do |event|
       next unless event.is_a?(Input::Events::Focus)
 
       # Some terminals report the current focus when the mode goes on.
@@ -211,17 +222,17 @@ begin
     end
     harness.modes.disable Input::Mode::FOCUS_EVENTS
   else
-    list.skip "focus", Status::Unsupported, "mode 1004 is not supported"
+    list.skip "focus", Status::Unsupported, "the terminal says mode 1004 is not supported"
   end
 
   # ----------------------------------------------------------------- mouse
 
-  if mouse
+  if mouse != false
     harness.modes.enable Input::Mode::MOUSE_SGR
 
     pressed = false
     list.step "click", "Click the X below with the left button.", "a left press and release at column 19, row 11",
-      marks: [{12, 20, "X"}] do |event|
+      quiet: quiet(mouse), marks: [{12, 20, "X"}] do |event|
       next unless event.is_a?(Input::Events::Mouse)
       next if event.action.motion?
 
@@ -239,7 +250,7 @@ begin
     moves = 0
     list.step "drag", "Press the left button on A, drag to B, and let go on B.",
       "a press at column 9, row 11, motion, a release at column 39, row 11",
-      marks: [{12, 10, "A"}, {12, 40, "B"}] do |event|
+      quiet: quiet(mouse), marks: [{12, 10, "A"}, {12, 40, "B"}] do |event|
       next unless event.is_a?(Input::Events::Mouse)
 
       where = "#{event.button} #{event.action} at column #{event.x}, row #{event.y}"
@@ -265,13 +276,14 @@ begin
       end
     end
 
-    list.step "right click", "Right-click anywhere.", "a right press" do |event|
+    list.step "right click", "Right-click anywhere.", "a right press", quiet: quiet(mouse) do |event|
       next unless event.is_a?(Input::Events::Mouse) && event.action.press?
 
       event.button.right? ? {Status::Pass, "at column #{event.x}, row #{event.y}"} : {Status::Fail, "#{event.button} pressed"}
     end
 
-    list.step "wheel", "Scroll with the wheel or the trackpad.", "a wheel press, either direction" do |event|
+    list.step "wheel", "Scroll with the wheel or the trackpad.", "a wheel press, either direction",
+      quiet: quiet(mouse) do |event|
       next unless event.is_a?(Input::Events::Mouse) && event.action.press?
 
       event.button.wheel? ? {Status::Pass, event.button.to_s} : {Status::Fail, "#{event.button} pressed"}
@@ -287,21 +299,21 @@ begin
 
     harness.modes.disable Input::Mode::MOUSE_SGR
 
-    if any_motion
+    if any_motion != false
       harness.modes.enable Input::Mode::MOUSE_SGR_ANY
       list.step "hover", "Move the pointer across the window without pressing anything.",
-        "motion reports with no button held" do |event|
+        "motion reports with no button held", quiet: quiet(any_motion) do |event|
         next unless event.is_a?(Input::Events::Mouse) && event.action.motion?
 
         event.button.none? ? {Status::Pass, "motion at column #{event.x}, row #{event.y}"} : {Status::Fail, "motion with #{event.button} held"}
       end
       harness.modes.disable Input::Mode::MOUSE_SGR_ANY
     else
-      list.skip "hover", Status::Unsupported, "mode 1003 is not supported"
+      list.skip "hover", Status::Unsupported, "the terminal says mode 1003 is not supported"
     end
   else
     %w[click drag right-click wheel hover].each do |title|
-      list.skip title, Status::Unsupported, "mode 1006 is not supported"
+      list.skip title, Status::Unsupported, "the terminal says mode 1006 is not supported"
     end
   end
 

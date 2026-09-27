@@ -15,6 +15,10 @@ module TermBuf
     #
     # *query* asks whether the terminal supports the mode, through
     # `Queries#ask`. `nil` for a mode there is no asking about.
+    #
+    # An answer is reliable and silence is not. Terminal.app answers no
+    # `DECRQM` at all and still sends focus, SGR mouse and paste reports, so
+    # an `Events::Unanswered` means "unknown", not "unsupported".
     record Mode, name : String, set : String, reset : String, query : Query? = nil do
       # Pasted text arrives between markers, as `Events::Paste`, rather than as
       # a very fast typist triggering every key binding on the way past.
