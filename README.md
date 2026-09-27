@@ -30,9 +30,9 @@ dependencies:
     github: plambert/termbuf-input.cr
 ```
 
-A stream owns the device only for reading. Raw mode, mouse reporting and bracketed paste are
-someone else's to turn on and to put back; the `stty` calls below are what that looks like with
-nothing else in the program.
+A stream owns the device only for reading. Raw mode is someone else's to turn on and to put back;
+the `stty` calls below are what that looks like with nothing else in the program. `Modes` turns on
+what the terminal reports, here bracketed paste and focus, and `#reset` turns it off again.
 
 ```crystal
 require "termbuf-input"
@@ -45,6 +45,10 @@ end
 
 stty "raw", "-echo"
 
+modes = Input::Modes.new STDOUT
+modes.enable Input::Mode::BRACKETED_PASTE
+modes.enable Input::Mode::FOCUS_EVENTS
+
 stream = Input::Stream.new STDIN, blocking: true
 stream.start
 
@@ -55,12 +59,15 @@ loop do
     print "key #{event.key}\r\n"
   when Input::Events::Paste
     print "pasted #{event.text.size} characters\r\n"
+  when Input::Events::Focus
+    print (event.focused ? "focus gained" : "focus lost"), "\r\n"
   when Input::Events::Closed
     break
   end
 end
 
 stream.close
+modes.reset
 stty "sane"
 ```
 
@@ -79,6 +86,7 @@ events of its own on the same channel, and anything unmatched above is ignored.
 | `Events::Paste` | `text` from between the bracketed paste markers, and `complete`, false when the paste ended on a stall or the size limit instead of a closing marker |
 | `Events::Pasting` | `bytes` so far and `elapsed`, repeated while a long paste is still arriving |
 | `Events::Mouse` | `button`, 0-based `x` and `y`, `modifiers`, `action` |
+| `Events::Focus` | `focused`, true when the window gained focus and false when it lost it |
 | `Events::Response` | the `bytes` of a sequence, for a pattern with nothing more specific to say |
 | `Events::Timer` | the `nonce` `Stream#after` handed back |
 | `Events::Signal` | the `signal`, and `count` deliveries of it since the count was last cleared |
@@ -99,7 +107,7 @@ event reaches the channel it walks the `#stages` chain.
 
 | Member | Does |
 | --- | --- |
-| `.new(io, blocking)` | Builds one over *io*. SGR mouse reports are watched for from this moment |
+| `.new(io, blocking)` | Builds one over *io*. SGR mouse and focus reports are watched for from this moment |
 | `#preload(bytes)` | Decodes *bytes* ahead of anything read, for what a capability probe swallowed. Before `#start` |
 | `#start` | Starts the reader and the dispatcher |
 | `#events` | `Channel(Event)`, 256 deep. Once it fills, decoding stops and then reading does |
@@ -154,12 +162,44 @@ something longer and there is nothing to time out.
 `Mouse.decode` reads an SGR report — `CSI < button ; column ; row M` or `m` — into an
 `Events::Mouse` with 0-based coordinates, or `nil` if the sequence is not one after all. A stream
 registers it on `CSI <` when it is built, so a report arrives as an event whoever asked the
-terminal for it. Turning the reporting on is the application's call: a terminal reporting the mouse
-no longer lets the person select text with it.
+terminal for it. Turning the reporting on is the application's call, with `Mode::MOUSE_SGR`: a
+terminal reporting the mouse no longer lets the person select text with it.
 
 A wheel notch is an `Action::Press` whose button answers `Button#wheel?`, and no release follows
 it. An application that would rather have the bytes unregisters the stream's pattern and puts its
 own on `CSI <`.
+
+## Focus
+
+`Focus.decode` reads a focus report into an `Events::Focus`: `CSI I` when the window gains focus
+and `CSI O` when it loses it. A stream registers it when it is built, so a report arrives as an
+event whoever asked the terminal for it. Only the bare forms count; a `CSI I` or `CSI O` with
+parameters goes on to the key decoder.
+
+Turning the reports on is the application's call, with `Mode::FOCUS_EVENTS`, and only worth making
+on a terminal that supports them. One that does not ignores the request. termbuf probes for support
+as `Capability::FocusEvents`.
+
+## Modes
+
+`Mode` names a terminal mode that changes what the terminal sends, with the `set` and `reset`
+sequences for it. The constants are the modes whose effects this shard decodes:
+
+| Mode | Makes the terminal send |
+| --- | --- |
+| `BRACKETED_PASTE` | paste markers, for `Events::Paste` |
+| `FOCUS_EVENTS` | focus reports, for `Events::Focus` |
+| `MOUSE_SGR` | SGR mouse reports of press, release and drag, for `Events::Mouse` |
+| `MOUSE_SGR_ANY` | as `MOUSE_SGR`, plus motion with no button held |
+| `MOUSE_SGR_CLICKS` | as `MOUSE_SGR`, without motion |
+| `KITTY_KEYBOARD` | kitty keyboard protocol keys. Set `Decoder#kitty_keyboard?` with it |
+| `MODIFY_OTHER_KEYS` | xterm's `CSI 27 ; m ; c ~` for modified keys it has no other code for |
+
+`Modes` tracks what is on over one output. `#enable` writes nothing for a mode already on, and
+writes the replacement for a mode sharing a name with one that is. The three mouse modes share
+`mouse-sgr`, because the terminal has one tracking mode. `#disable` turns one off, and `#reset`
+turns them all off in the reverse of the order they went on. It is guarded, so a signal hook can
+reset while the application enables something elsewhere.
 
 ## Patterns
 
@@ -202,12 +242,12 @@ require "termbuf-input"
 alias Input = TermBuf::Input
 
 stream = Input::Stream.new STDIN, blocking: true
+modes = Input::Modes.new STDOUT
 signals = stream.signals
 
 signals.mode ::Signal::INT, Input::Signals::Mode::WarnThenExit
 signals.threshold ::Signal::INT, 2
-signals.before_exit { print "\e[?1049l" }
-signals.on(::Signal::TSTP) { print "\e[?1049l" }
+signals.before_exit { modes.reset }
 signals.install
 ```
 

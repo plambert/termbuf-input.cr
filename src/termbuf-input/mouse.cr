@@ -11,8 +11,8 @@ module TermBuf
     # `CSI < button ; column ; row M` for a press and the same with a final `m`
     # for a release, all of it in decimal.
     #
-    # Turning the reporting on is the application's call, through whatever its
-    # driver offers. Decoding is not: `Input::Stream` watches for
+    # Turning the reporting on is the application's call, with
+    # `Mode::MOUSE_SGR` or one of its siblings. Decoding is not: `Input::Stream` watches for
     # `CSI <` from the moment it is built, so a report arrives as
     # `Events::Mouse` whoever asked for it.
     module Mouse

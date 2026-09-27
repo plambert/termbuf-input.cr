@@ -1,5 +1,6 @@
 require "./key"
 require "./mouse"
+require "./focus"
 require "./timers"
 
 module TermBuf::Input
@@ -36,6 +37,9 @@ module TermBuf::Input
     # it as typing will run its key bindings over whatever was on the
     # clipboard.
     #
+    # The markers arrive only once the application has turned them on with
+    # `Input::Mode::BRACKETED_PASTE`.
+    #
     # *complete* is false when the terminal never sent the closing marker and
     # the paste was ended on a stall or a size limit instead. What arrived is
     # still delivered, since it beats nothing, but an application storing it
@@ -59,9 +63,8 @@ module TermBuf::Input
     # coordinates the terminal sends, so they can be handed to a buffer's hit
     # test as they stand.
     #
-    # These arrive only once the application has turned reporting on, which is
-    # `CSI ? 1000 ; 1006 h` at its shortest — whatever mode set the application
-    # wants, sent through whatever its driver offers.
+    # These arrive only once the application has turned reporting on with
+    # `Input::Mode::MOUSE_SGR` or one of its siblings.
     #
     # Nothing enables it for the application, because a terminal reporting the
     # mouse is one that no longer lets the person select text with it, and that
@@ -72,6 +75,18 @@ module TermBuf::Input
     # `Input::Mouse::Button#wheel?`, and no release follows it.
     record Mouse, button : Input::Mouse::Button, x : Int32, y : Int32,
       modifiers : Modifiers, action : Input::Mouse::Action do
+      include Event
+    end
+
+    # The terminal's window gained or lost focus, out of a focus report.
+    #
+    # These arrive only once the application has turned the reports on with
+    # `Input::Mode::FOCUS_EVENTS`, and only from a terminal that supports them. Whatever
+    # turned the mode on turns it off again on the way out.
+    #
+    # A terminal is not obliged to say where focus stands when the mode goes
+    # on, so the first report may be a while coming.
+    record Focus, focused : Bool do
       include Event
     end
 

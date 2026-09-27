@@ -2,6 +2,8 @@ require "./termbuf-input/key"
 require "./termbuf-input/utf8"
 require "./termbuf-input/event"
 require "./termbuf-input/mouse"
+require "./termbuf-input/focus"
+require "./termbuf-input/mode"
 require "./termbuf-input/scanner"
 require "./termbuf-input/patterns"
 require "./termbuf-input/decoder"
@@ -33,9 +35,13 @@ module TermBuf
   # `Input::Events::Timer` arrives in order with everything else, and
   # `Input::Signals` puts signals on it too, so that a resize or an interrupt
   # is ordered against the keystrokes around it. `Input::Mouse` decodes the SGR
-  # mouse reports, which a stream watches for from the moment it is built;
-  # turning the reporting on is the application's to do, through whatever mode
-  # its driver offers.
+  # mouse reports, which a stream watches for from the moment it is built, and
+  # `Input::Focus` does the same for focus reports.
+  #
+  # `Input::Mode` names the terminal modes that make those reports, and the
+  # others this shard decodes the effects of: bracketed paste, the kitty
+  # keyboard protocol and modifyOtherKeys. `Input::Modes` turns them on
+  # through an output and back off again on the way out.
   #
   # `Input::Stage` is the last thing an event passes: a chain the driver and
   # the application both put translations in, walked between the dispatcher

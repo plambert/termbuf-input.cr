@@ -1,5 +1,6 @@
 require "./event"
 require "./decoder"
+require "./focus"
 require "./mouse"
 require "./patterns"
 require "./reader"
@@ -80,8 +81,8 @@ module TermBuf
       # read cannot stall the fibres around it; an `IO::Memory` or a pipe the
       # event loop can wait on does not, and is read from a fibre.
       #
-      # The SGR mouse pattern is registered here, so a report is understood
-      # from this moment whether or not this shard asked for the reporting.
+      # The SGR mouse and focus patterns are registered here, so a report is
+      # understood from this moment whether or not this shard asked for it.
       def initialize(io : IO, blocking : Bool)
         @reader = Reader.new io, blocking
         @events = Channel(Event).new CAPACITY
@@ -92,6 +93,7 @@ module TermBuf
         @preloaded = Bytes.empty
 
         watch_the_mouse
+        watch_focus
       end
 
       # Watches for SGR mouse reports from the start, so that a terminal
@@ -107,6 +109,16 @@ module TermBuf
       private def watch_the_mouse : Pattern
         @patterns.register(Prefix::CSI, head: "<") do |sequence|
           Mouse.decode sequence
+        end
+      end
+
+      # Watches for focus reports from the start, for the same reasons as
+      # `#watch_the_mouse`. An application that would rather have the bytes
+      # unregisters this and puts its own pattern on `CSI` with terminator `I`
+      # or `O`.
+      private def watch_focus : Pattern
+        @patterns.register(Prefix::CSI) do |sequence|
+          Focus.decode sequence
         end
       end
 

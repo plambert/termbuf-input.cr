@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Events::Focus` and `Input::Focus`, decoding the `CSI I` and `CSI O` focus reports of DEC mode
+  1004. A stream watches for them from the moment it is built; turning the reports on belongs to
+  whoever set the terminal up, where the terminal supports them.
+- `Input::Mode`, the terminal modes whose effects this shard decodes, with their set and reset
+  sequences: `BRACKETED_PASTE`, `FOCUS_EVENTS`, `MOUSE_SGR`, `MOUSE_SGR_ANY`, `MOUSE_SGR_CLICKS`,
+  `KITTY_KEYBOARD` and `MODIFY_OTHER_KEYS`. The record and the first six move here from termbuf's
+  `Tty`.
+- `Input::Modes`, which turns modes on through an output, writes nothing for one already on, and
+  resets them all in reverse order on the way out.
+
 ## [0.5.0] - 2026-09-11
 
 ### Changed
