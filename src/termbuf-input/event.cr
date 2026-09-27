@@ -115,11 +115,17 @@ module TermBuf::Input
 
     # How big the text area is in pixels, in answer to
     # `Input::Query::TEXT_AREA_PIXELS`.
+    #
+    # Pixels are whatever the terminal means by them. ghostty and kitty count
+    # device pixels, so a Retina display doubles them; iTerm2 and Terminal.app
+    # count points.
     record TextAreaPixels, width : Int32, height : Int32 do
       include Event
     end
 
-    # How big one cell is in pixels, in answer to `Input::Query::CELL_PIXELS`.
+    # How big one cell is in pixels, in answer to `Input::Query::CELL_PIXELS`,
+    # in the terminal's own units as `TextAreaPixels` describes. iTerm2 and
+    # Terminal.app do not answer.
     record CellPixels, width : Int32, height : Int32 do
       include Event
     end
