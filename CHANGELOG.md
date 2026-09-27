@@ -17,6 +17,14 @@ All notable changes to this project are documented here. The format follows
   `Tty`.
 - `Input::Modes`, which turns modes on through an output, writes nothing for one already on, and
   resets them all in reverse order on the way out.
+- `Input::Query` and `Input::Queries`, which ask the terminal where the cursor is, how big the
+  text area and a cell are, what its colours are, whether it supports a mode, which kitty keyboard
+  flags are in force, its device attributes and its name. The answer arrives as an event, or as
+  `Events::Unanswered` when the device attributes request sent after every query is answered
+  first. `Mode#query` asks about a mode's support.
+- `Input::Replies`, the parsers for those answers, usable on sequences read without a stream.
+- `Input::Claimed`, which a pattern returns to keep a sequence and deliver nothing.
+- `examples/queries.cr` and `examples/events.cr`, for trying all of it on a real terminal.
 
 ## [0.5.0] - 2026-09-11
 

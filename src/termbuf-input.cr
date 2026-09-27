@@ -3,6 +3,8 @@ require "./termbuf-input/utf8"
 require "./termbuf-input/event"
 require "./termbuf-input/mouse"
 require "./termbuf-input/focus"
+require "./termbuf-input/replies"
+require "./termbuf-input/query"
 require "./termbuf-input/mode"
 require "./termbuf-input/scanner"
 require "./termbuf-input/patterns"
@@ -42,6 +44,11 @@ module TermBuf
   # others this shard decodes the effects of: bracketed paste, the kitty
   # keyboard protocol and modifyOtherKeys. `Input::Modes` turns them on
   # through an output and back off again on the way out.
+  #
+  # `Input::Query` is a request the terminal answers — where the cursor is,
+  # how big the window is, what colour the background is, whether a mode is
+  # supported — and `Input::Queries` sends one and delivers the answer as an
+  # event, or says it went unanswered. `Input::Replies` holds the parsers.
   #
   # `Input::Stage` is the last thing an event passes: a chain the driver and
   # the application both put translations in, walked between the dispatcher

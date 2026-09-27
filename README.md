@@ -88,6 +88,8 @@ events of its own on the same channel, and anything unmatched above is ignored.
 | `Events::Mouse` | `button`, 0-based `x` and `y`, `modifiers`, `action` |
 | `Events::Focus` | `focused`, true when the window gained focus and false when it lost it |
 | `Events::Response` | the `bytes` of a sequence, for a pattern with nothing more specific to say |
+| `Events::CursorPosition`, `TextAreaSize`, `TextAreaPixels`, `CellPixels`, `ModeReport`, `KittyKeyboard`, `Color`, `DeviceAttributes`, `TerminalName` | the answer to a `Query` |
+| `Events::Unanswered` | the `query` the terminal had no answer to |
 | `Events::Timer` | the `nonce` `Stream#after` handed back |
 | `Events::Signal` | the `signal`, and `count` deliveries of it since the count was last cleared |
 | `Events::Warning`, `Events::Failure` | a message or an exception. Nothing here sends them; they are for a driver to `#inject` |
@@ -201,6 +203,65 @@ writes the replacement for a mode sharing a name with one that is. The three mou
 turns them all off in the reverse of the order they went on. It is guarded, so a signal hook can
 reset while the application enables something elsewhere.
 
+## Queries
+
+A terminal answers questions about itself, and `Queries` asks them. `#ask` writes a `Query` and the
+answer arrives on the stream's channel as an event, in its place among everything else.
+
+```crystal
+require "termbuf-input"
+
+alias Input = TermBuf::Input
+
+stream = Input::Stream.new STDIN, blocking: true
+queries = Input::Queries.new stream, STDOUT
+stream.start
+
+queries.ask Input::Query::BACKGROUND
+queries.ask Input::Mode::FOCUS_EVENTS
+
+loop do
+  case event = stream.events.receive
+  when Input::Events::Color      then puts event.dark? ? "dark" : "light"
+  when Input::Events::ModeReport then puts event.state.supported?
+  when Input::Events::Unanswered then puts "no answer to #{event.query}"
+  end
+end
+```
+
+| Query | Answer |
+| --- | --- |
+| `CURSOR_POSITION` | `Events::CursorPosition`, 0-based `x` and `y` |
+| `TEXT_AREA_SIZE` | `Events::TextAreaSize`, `columns` and `rows` |
+| `TEXT_AREA_PIXELS`, `CELL_PIXELS` | `Events::TextAreaPixels`, `Events::CellPixels`, `width` and `height` |
+| `FOREGROUND`, `BACKGROUND`, `CURSOR_COLOR`, `.palette(n)` | `Events::Color`, eight-bit components and `#dark?` |
+| `.mode(n)`, and `Mode#query` through `#ask(mode)` | `Events::ModeReport`, a `ModeState` with `#supported?` |
+| `KITTY_KEYBOARD` | `Events::KittyKeyboard`, the `flags` in force |
+| `DEVICE_ATTRIBUTES`, `SECONDARY_DEVICE_ATTRIBUTES` | `Events::DeviceAttributes` |
+| `TERMINAL_NAME` | `Events::TerminalName`, what XTVERSION says |
+
+Every `#ask` writes a primary device attributes request after the query, which every terminal
+answers. Terminals answer in order, so when that reply arrives first the query becomes
+`Events::Unanswered`. Otherwise it is swallowed: a handler that returns `Claimed` keeps a sequence
+from going anywhere.
+
+Only the oldest query is waiting at any moment, so a reply shaped like a key is taken for an
+answer only while its query is out. A cursor report has the shape of a modified F3, and a Ctrl+F3
+pressed in that window reads as the answer.
+
+`Replies` holds the parsers, which take a `Sequence` and know nothing about who asked, for a
+caller reading the device itself.
+
+## Examples
+
+`examples/queries.cr` asks every query and prints the answers. `examples/events.cr` prints every
+event, with the modes switched on and off from the keyboard.
+
+```bash
+crystal run examples/queries.cr
+crystal run examples/events.cr
+```
+
 ## Patterns
 
 A reply and a keystroke cannot be told apart by looking at them: an arrow key sends `ESC [ A`, and
@@ -222,8 +283,9 @@ stream.patterns.unregister cursor
 ```
 
 A handler is given a `Sequence` — the `bytes`, the `Prefix`, the `body` after the introducer, and
-the `final` byte for the kinds that end with one — and returns an event, or `nil` to mean "not mine
-after all", which sends the sequence on to the next pattern and failing that to the key decoder.
+the `final` byte for the kinds that end with one — and returns an event, `Claimed` to keep the
+sequence and deliver nothing, or `nil` to mean "not mine after all", which sends the sequence on to
+the next pattern and failing that to the key decoder.
 `Prefix.split` turns a written prefix such as `"\e[?"` into the `Prefix` and the head to match,
 for an API that would rather keep taking a string.
 

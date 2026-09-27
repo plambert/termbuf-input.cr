@@ -18,6 +18,16 @@ module TermBuf::Input
   module Event
   end
 
+  # What a pattern returns for a sequence it claims and has nothing to say
+  # about. The sequence goes no further: not to another pattern, not to the
+  # key decoder, and not to the application.
+  #
+  # `Queries` claims the device attributes reply it asks for after every query
+  # this way, since that reply only marks where the answers end.
+  struct Claimed
+    include Event
+  end
+
   # What the input side tells the application about, delivered over one
   # channel.
   #
@@ -87,6 +97,80 @@ module TermBuf::Input
     # A terminal is not obliged to say where focus stands when the mode goes
     # on, so the first report may be a while coming.
     record Focus, focused : Bool do
+      include Event
+    end
+
+    # Where the cursor is, in answer to `Input::Query::CURSOR_POSITION`.
+    #
+    # *x* and *y* are 0-based cells, like a mouse report's.
+    record CursorPosition, x : Int32, y : Int32 do
+      include Event
+    end
+
+    # How many columns and rows the text area has, in answer to
+    # `Input::Query::TEXT_AREA_SIZE`.
+    record TextAreaSize, columns : Int32, rows : Int32 do
+      include Event
+    end
+
+    # How big the text area is in pixels, in answer to
+    # `Input::Query::TEXT_AREA_PIXELS`.
+    record TextAreaPixels, width : Int32, height : Int32 do
+      include Event
+    end
+
+    # How big one cell is in pixels, in answer to `Input::Query::CELL_PIXELS`.
+    record CellPixels, width : Int32, height : Int32 do
+      include Event
+    end
+
+    # What the terminal says about DEC private mode *mode*, in answer to
+    # `Input::Query.mode` or a `Input::Mode#query`.
+    record ModeReport, mode : Int32, state : Input::ModeState do
+      include Event
+    end
+
+    # The kitty keyboard protocol flags in force, in answer to
+    # `Input::Query::KITTY_KEYBOARD`. An answer at all means the terminal
+    # speaks the protocol; zero means nothing is asked of it yet.
+    record KittyKeyboard, flags : Int32 do
+      include Event
+    end
+
+    # One of the terminal's colours, in answer to `Input::Query::FOREGROUND`,
+    # `BACKGROUND`, `CURSOR_COLOR` or `Input::Query.palette`.
+    #
+    # *index* is the palette entry for `ColorSlot::Palette` and `nil` for the
+    # rest. The components are scaled to eight bits whatever precision the
+    # terminal answered in.
+    record Color, slot : Input::ColorSlot, index : Int32?,
+      red : UInt8, green : UInt8, blue : UInt8 do
+      include Event
+
+      # Whether this colour is dark, by its relative luminance. Asked of the
+      # background, it is how an application picks a light or dark theme.
+      def dark? : Bool
+        0.2126 * red + 0.7152 * green + 0.0722 * blue < 128
+      end
+    end
+
+    # The terminal's device attributes, in answer to
+    # `Input::Query::DEVICE_ATTRIBUTES` or, with *secondary* set,
+    # `Input::Query::SECONDARY_DEVICE_ATTRIBUTES`.
+    record DeviceAttributes, secondary : Bool, parameters : Array(Int32) do
+      include Event
+    end
+
+    # The name and version the terminal gives for itself, in answer to
+    # `Input::Query::TERMINAL_NAME`.
+    record TerminalName, text : String do
+      include Event
+    end
+
+    # *query* went unanswered. The terminal answered the device attributes
+    # request sent after it first, and terminals answer in order, so no
+    # answer is coming.
+    record Unanswered, query : Input::Query do
       include Event
     end
 

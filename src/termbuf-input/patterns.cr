@@ -120,7 +120,8 @@ module TermBuf
     #
     # The handler returning `nil` means "not mine after all", so a pattern that
     # can only tell from the body whether it wants a sequence can let it carry
-    # on to the next pattern and, failing that, to the key decoder.
+    # on to the next pattern and, failing that, to the key decoder. Returning
+    # `Claimed` keeps the sequence and delivers nothing.
     class Pattern
       # Which introducer this is about.
       getter prefix : Prefix

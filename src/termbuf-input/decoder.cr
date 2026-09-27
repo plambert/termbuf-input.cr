@@ -220,7 +220,7 @@ module TermBuf::Input
 
       if handler = @on_sequence
         if event = handler.call Sequence.parse(bytes)
-          emit.call event
+          emit.call event unless event.is_a? Claimed
           return
         end
       end

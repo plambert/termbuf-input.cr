@@ -1,3 +1,5 @@
+require "./query"
+
 module TermBuf
   module Input
     # A terminal mode that changes what the terminal sends, and the sequences
@@ -10,15 +12,18 @@ module TermBuf
     # The *name* is what identity means, not the sequences. The terminal has
     # one mouse tracking mode, so the three mouse modes share a name, and
     # enabling one after another replaces it rather than adding to it.
-    record Mode, name : String, set : String, reset : String do
+    #
+    # *query* asks whether the terminal supports the mode, through
+    # `Queries#ask`. `nil` for a mode there is no asking about.
+    record Mode, name : String, set : String, reset : String, query : Query? = nil do
       # Pasted text arrives between markers, as `Events::Paste`, rather than as
       # a very fast typist triggering every key binding on the way past.
-      BRACKETED_PASTE = new "bracketed-paste", "\e[?2004h", "\e[?2004l"
+      BRACKETED_PASTE = new "bracketed-paste", "\e[?2004h", "\e[?2004l", Query.mode(2004)
 
       # The terminal reports its window gaining and losing focus, as
       # `Events::Focus`. Only worth asking for where the terminal supports it;
       # one that does not ignores the request, and nothing arrives.
-      FOCUS_EVENTS = new "focus-events", "\e[?1004h", "\e[?1004l"
+      FOCUS_EVENTS = new "focus-events", "\e[?1004h", "\e[?1004l", Query.mode(1004)
 
       # Mouse reports in the SGR encoding, as `Events::Mouse`: press, release,
       # and motion while a button is held. This is mode 1002 with 1006, and
@@ -26,15 +31,18 @@ module TermBuf
       #
       # A terminal reporting the mouse no longer lets the person select text
       # with it, which is a trade only the application can weigh.
-      MOUSE_SGR = new "mouse-sgr", "\e[?1002h\e[?1006h", "\e[?1006l\e[?1002l"
+      #
+      # All three mouse modes ask about 1006, the encoding, since a terminal
+      # without it reports in a form this shard does not decode.
+      MOUSE_SGR = new "mouse-sgr", "\e[?1002h\e[?1006h", "\e[?1006l\e[?1002l", Query.mode(1006)
 
       # As `MOUSE_SGR`, with motion reported when no button is held too, which
       # is what hover needs. Every cell the pointer crosses is a report.
-      MOUSE_SGR_ANY = new "mouse-sgr", "\e[?1003h\e[?1006h", "\e[?1006l\e[?1003l"
+      MOUSE_SGR_ANY = new "mouse-sgr", "\e[?1003h\e[?1006h", "\e[?1006l\e[?1003l", Query.mode(1006)
 
       # As `MOUSE_SGR`, with press and release only. Kept for measuring what a
       # terminal does under mode 1000, not for use.
-      MOUSE_SGR_CLICKS = new "mouse-sgr", "\e[?1000h\e[?1006h", "\e[?1006l\e[?1000l"
+      MOUSE_SGR_CLICKS = new "mouse-sgr", "\e[?1000h\e[?1006h", "\e[?1006l\e[?1000l", Query.mode(1006)
 
       # The kitty keyboard protocol, which tells apart keys an ordinary
       # terminal reports identically. The set pushes a flag set onto the
@@ -42,11 +50,12 @@ module TermBuf
       #
       # Set `Decoder#kitty_keyboard?` alongside it, so that a lone escape is
       # held for the rest of its sequence instead of timed out.
-      KITTY_KEYBOARD = new "kitty-keyboard", "\e[>1u", "\e[<u"
+      KITTY_KEYBOARD = new "kitty-keyboard", "\e[>1u", "\e[<u", Query::KITTY_KEYBOARD
 
       # xterm's modifyOtherKeys at level 2, which reports a modified key the
       # usual encodings cannot name, such as `Ctrl+.`, as `CSI 27 ; m ; c ~`.
       # The kitty protocol does the same job better where it is available.
+      # Few terminals answer a question about this one, so it has no query.
       MODIFY_OTHER_KEYS = new "modify-other-keys", "\e[>4;2m", "\e[>4m"
     end
 
