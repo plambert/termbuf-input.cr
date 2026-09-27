@@ -149,6 +149,23 @@ module TermBuf
         @state.synchronize { @pending.size }
       end
 
+      # Waits until every query has been answered or given up on, for no
+      # longer than *timeout*, and says whether they all were.
+      #
+      # For the way out. A reply still in flight when the terminal goes back
+      # to cooked mode lands on the shell's command line as text.
+      def settle(timeout : Time::Span = 1.second) : Bool
+        deadline = Time.instant + timeout
+
+        until pending.zero?
+          return false if Time.instant >= deadline
+
+          sleep 5.milliseconds
+        end
+
+        true
+      end
+
       # Forgets every outstanding query. A late answer then arrives as whatever
       # the patterns and the key decoder make of it.
       def clear : Nil

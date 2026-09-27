@@ -126,6 +126,19 @@ Spectator.describe TermBuf::Input::Queries do
     end
   end
 
+  it "settles once the sentinel's reply is in" do
+    with_conversation do |talk|
+      talk.queries.ask Query::CURSOR_POSITION
+      talk.reply "\e[3;7R"
+      talk.event
+
+      expect(talk.queries.settle(50.milliseconds)).to be_false
+
+      talk.reply "\e[?62c"
+      expect(talk.queries.settle).to be_true
+    end
+  end
+
   it "refuses to ask about a mode with no query" do
     with_conversation do |talk|
       expect { talk.queries.ask TermBuf::Input::Mode::MODIFY_OTHER_KEYS }.to raise_error ArgumentError

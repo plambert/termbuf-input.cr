@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format follows
   flags are in force, its device attributes and its name. The answer arrives as an event, or as
   `Events::Unanswered` when the device attributes request sent after every query is answered
   first. `Mode#query` asks about a mode's support.
+- `Queries#settle`, which waits for outstanding queries before the terminal goes back to cooked
+  mode, so no reply lands on the shell's command line.
 - `Input::Replies`, the parsers for those answers, usable on sequences read without a stream.
 - `Input::Claimed`, which a pattern returns to keep a sequence and deliver nothing.
 - `examples/queries.cr` and `examples/events.cr`, for trying all of it on a real terminal.

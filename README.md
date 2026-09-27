@@ -249,6 +249,9 @@ Only the oldest query is waiting at any moment, so a reply shaped like a key is 
 answer only while its query is out. A cursor report has the shape of a modified F3, and a Ctrl+F3
 pressed in that window reads as the answer.
 
+`#settle` waits until nothing is outstanding. Call it before putting the terminal back in cooked
+mode, or a reply still in flight lands on the shell's command line.
+
 `Replies` holds the parsers, which take a `Sequence` and know nothing about who asked, for a
 caller reading the device itself.
 

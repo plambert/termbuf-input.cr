@@ -197,6 +197,7 @@ class Harness
 
   # Puts the terminal back, prints the results, and writes the report.
   def finish(stopped : Bool = false) : Nil
+    @queries.settle
     restore
     @queries.close
     @stream.close
