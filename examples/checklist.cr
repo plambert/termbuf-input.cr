@@ -355,7 +355,10 @@ begin
   harness.modes.enable Input::Mode::MODIFY_OTHER_KEYS
   plain = ->(key : Input::Key) { "the terminal sent a plain '.'" if key.character? && key.char == '.' && !key.ctrl? }
   silent = -> { {Status::Unsupported, "nothing arrived, which is what Ctrl+. sends without the mode"} }
-  list.key "modifyOtherKeys", "Press Ctrl+. (control and full stop).", "Ctrl+.", plain, 20.seconds, silent do |key|
+  list.key "modifyOtherKeys",
+    "Press Ctrl+. (control and full stop) once, then press nothing else.\n" \
+    "A terminal without modifyOtherKeys sends nothing, and after five seconds that is recorded as unsupported.",
+    "Ctrl+., or nothing at all", plain, 5.seconds, silent do |key|
     key.character? && key.char == '.' && key.ctrl?
   end
   harness.modes.disable Input::Mode::MODIFY_OTHER_KEYS
