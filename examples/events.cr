@@ -3,6 +3,10 @@
 #
 #     crystal run examples/events.cr
 #
+# This is for poking at something once a report has turned it up. It judges
+# nothing and writes nothing; queries.cr and checklist.cr are the ones that
+# say what to expect and write a report to send back.
+#
 # Each mode's support is asked about at the start. Every mode is reset on
 # the way out, including on SIGTERM and SIGHUP.
 

@@ -12,3 +12,6 @@
 /.spectator-failures
 /tmp/
 /.rumdl_cache/
+
+# Reports the example programs write
+termbuf-input-*.txt

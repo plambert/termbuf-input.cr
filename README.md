@@ -254,12 +254,21 @@ caller reading the device itself.
 
 ## Examples
 
-`examples/queries.cr` asks every query and prints the answers. `examples/events.cr` prints every
-event, with the modes switched on and off from the keyboard.
+Two programs test a terminal and write a report, `termbuf-input-<program>-<terminal>.txt` in the
+current directory, marking each check PASS, FAIL, UNSUPPORTED, SKIP or INFO. Run them outside tmux
+and screen.
+
+| Program | Does |
+| --- | --- |
+| `examples/queries.cr` | Asks every query and checks what it can: the cursor against where it was put, the size against `stty size`, the pixel sizes against each other. Asks you to compare the colours with swatches |
+| `examples/checklist.cr` | Walks through keys, paste, focus, the mouse, the kitty keyboard protocol, modifyOtherKeys and resizing, saying what to do and what should arrive. A failed step offers a retry |
+| `examples/events.cr` | Prints every event and toggles the modes from the keyboard. Judges nothing |
+
+A FAIL, or anything under "Sequences nothing recognised", is a bug.
 
 ```bash
 crystal run examples/queries.cr
-crystal run examples/events.cr
+crystal run examples/checklist.cr
 ```
 
 ## Patterns
