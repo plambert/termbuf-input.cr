@@ -50,12 +50,24 @@ module TermBuf
       # is an event because it is not a shutdown at all, and because the
       # application — or, in this shard, the terminal driver — is the only one
       # who knows what to do about a window that changed size.
-      DEFAULT_MODES = {
-        ::Signal::TERM  => Mode::Exit,
-        ::Signal::INT   => Mode::Exit,
-        ::Signal::HUP   => Mode::Exit,
-        ::Signal::WINCH => Mode::Event,
-      }
+      #
+      # Windows has neither `HUP` nor `WINCH`. Its console says Ctrl+Break
+      # where a terminal would say neither, and a window that changed size
+      # comes in with the input, not as a signal.
+      {% if flag?(:win32) %}
+        DEFAULT_MODES = {
+          ::Signal::TERM  => Mode::Exit,
+          ::Signal::INT   => Mode::Exit,
+          ::Signal::BREAK => Mode::Exit,
+        }
+      {% else %}
+        DEFAULT_MODES = {
+          ::Signal::TERM  => Mode::Exit,
+          ::Signal::INT   => Mode::Exit,
+          ::Signal::HUP   => Mode::Exit,
+          ::Signal::WINCH => Mode::Event,
+        }
+      {% end %}
 
       # How many deliveries `Mode::WarnThenExit` takes before it exits, when
       # nothing has said otherwise.

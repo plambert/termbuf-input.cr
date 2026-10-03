@@ -365,26 +365,30 @@ begin
 
   # ---------------------------------------------------------------- resize
 
-  list.step "resize", "Resize this window by dragging its edge, then let go.",
-    "SIGWINCH, and a size that matches stty size" do |event|
-    next unless event.is_a?(Input::Events::Signal) && event.signal.winch?
+  # Windows has no SIGWINCH to wait for. Its console reports a resize with
+  # the input, which the stream does not deliver yet.
+  {% unless flag?(:win32) %}
+    list.step "resize", "Resize this window by dragging its edge, then let go.",
+      "SIGWINCH, and a size that matches stty size" do |event|
+      next unless event.is_a?(Input::Events::Signal) && event.signal.winch?
 
-    # Let the drag finish before asking.
-    while harness.next_event(700.milliseconds)
-    end
-
-    expected = harness.stty_size
-    case answer = harness.ask Input::Query::TEXT_AREA_SIZE
-    when Input::Events::TextAreaSize
-      if {answer.columns, answer.rows} == expected
-        {Status::Pass, "#{answer.columns} × #{answer.rows}"}
-      else
-        {Status::Fail, "the terminal says #{answer.columns} × #{answer.rows}, stty size says #{expected}"}
+      # Let the drag finish before asking.
+      while harness.next_event(700.milliseconds)
       end
-    else
-      {Status::Pass, "SIGWINCH arrived; the terminal does not report its size"}
+
+      expected = harness.stty_size
+      case answer = harness.ask Input::Query::TEXT_AREA_SIZE
+      when Input::Events::TextAreaSize
+        if {answer.columns, answer.rows} == expected
+          {Status::Pass, "#{answer.columns} × #{answer.rows}"}
+        else
+          {Status::Fail, "the terminal says #{answer.columns} × #{answer.rows}, stty size says #{expected}"}
+        end
+      else
+        {Status::Pass, "SIGWINCH arrived; the terminal does not report its size"}
+      end
     end
-  end
+  {% end %}
 rescue Harness::Stopped
   stopped = true
 ensure

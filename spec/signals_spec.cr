@@ -1,5 +1,10 @@
 require "./spec_helper"
 
+# Every example here delivers a real signal with `Process.signal`, and names
+# signals Windows does not have. Windows has no way to send a process a
+# signal, and its console's control events are specced on their own.
+{% skip_file if flag?(:win32) %}
+
 # A `Signals` over a channel of its own, so a delivery can be taken straight
 # off the queue with no stream in the way, and an exit can be watched without
 # it killing the spec process.
