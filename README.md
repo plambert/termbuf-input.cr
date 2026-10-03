@@ -330,7 +330,13 @@ it, so the process dies of what it was sent. `Mode::Event` delivers an `Events::
 on. `Mode::WarnThenExit` delivers one each time and exits on the `#threshold`th, which is what
 "press again to quit" is made of; `#reset_count` clears the tally. A `#on` hook runs instead of the
 modes, for the signals whose answer is neither — `TSTP` gives the terminal back, `CONT` takes it
-again. `TERM`, `INT` and `HUP` default to `Exit` and `WINCH` to `Event`.
+again. `TERM`, `INT` and `HUP` default to `Exit` and `WINCH` to `Event`; on Windows, which has
+neither `HUP` nor `WINCH`, the defaults are `TERM`, `INT` and `BREAK`, all `Exit`.
+
+`WINCH` does not arrive as an `Events::Signal`. The stream measures the window and sends an
+`Events::Resize` with the size it is now and the size it last reported, through `Stream#measure`,
+which is `SizeDetector.detect` unless something knows better. A Windows console reports the change
+with the input rather than as a signal, and it arrives as the same event.
 
 ## Stages
 
@@ -364,8 +370,8 @@ chain it started on. Removing or reordering is a `#replace`:
 stream.stages.replace stream.stages.reject { |stage| stage.name == :drop_motion }
 ```
 
-termbuf answers `SIGWINCH` in a stage called `:resize`, which consumes the signal and sends a
-resize event in its place. `#inject` bypasses the chain.
+termbuf answers `Events::Resize` in a stage called `:resize`, which consumes it, resizes its
+buffer, and injects a resize of its own once the buffer matches. `#inject` bypasses the chain.
 
 ## Decoding without a device
 

@@ -4,6 +4,7 @@ require "./focus"
 require "./mouse"
 require "./patterns"
 require "./reader"
+require "./screen_size"
 require "./signals"
 require "./stage"
 require "./stages"
@@ -73,6 +74,15 @@ module TermBuf
 
       # What every event walks before the application sees it. See `#stages`.
       @stages : Stages = Stages.new
+
+      # How big the window is, asked when the operating system says it
+      # changed. `SizeDetector.detect` unless something knows better: termbuf
+      # measures the device it is drawing on, and a spec answers what it likes.
+      property measure : Proc(ScreenSize) = -> { SizeDetector.detect }
+
+      # The size the last `Events::Resize` reported, which the next one carries
+      # as its previous size. The dispatcher's alone.
+      @reported : ScreenSize? = nil
 
       # Builds a stream over *io*, which nothing is read from until `#start`.
       #
@@ -178,9 +188,9 @@ module TermBuf
       # flowing.
       #
       # Empty by default. A driver puts its own translations here — termbuf
-      # answers `SIGWINCH` in a stage called `:resize`, which consumes the
-      # signal and sends a resize event in its place — and an application
-      # adds, removes or reorders them:
+      # answers `Events::Resize` in a stage called `:resize`, which consumes it,
+      # resizes the buffer, and injects one of its own once the buffer matches —
+      # and an application adds, removes or reorders them:
       #
       #     stream.stages.push my_stage
       #
@@ -243,11 +253,28 @@ module TermBuf
       end
 
       # A signal arrived. It becomes an event naming the signal and how many of
-      # it have arrived, and what to make of that is the stage chain's to say:
-      # termbuf's `:resize` stage swallows `SIGWINCH` and sends a resize
-      # instead, and an application that wants the signal raw removes it.
+      # it have arrived, and what to make of that is the stage chain's to say.
+      #
+      # `SIGWINCH` is the exception: a window that changed size is something
+      # the terminal said, not something to act on, so it becomes an
+      # `Events::Resize` with the size the window is now. Windows has no such
+      # signal and reports the change with the input instead.
       private def signalled(message : Signals::Signalled) : Nil
+        {% unless flag?(:win32) %}
+          return resized if message.signal.winch?
+        {% end %}
+
         deliver Events::Signal.new message.signal, message.count
+      end
+
+      # The window changed size. Measures it, and sends an `Events::Resize`
+      # carrying the size this stream last reported as the previous one.
+      private def resized : Nil
+        size = @measure.call
+        previous = @reported
+        @reported = size
+
+        deliver Events::Resize.new(size, previous)
       end
 
       # Walks *event* through the stages and sends whatever comes out.

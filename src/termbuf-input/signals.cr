@@ -49,7 +49,8 @@ module TermBuf
       # The three that mean "stop" restore the terminal on the way out. `WINCH`
       # is an event because it is not a shutdown at all, and because the
       # application — or, in this shard, the terminal driver — is the only one
-      # who knows what to do about a window that changed size.
+      # who knows what to do about a window that changed size. The stream turns
+      # it into an `Events::Resize` rather than an `Events::Signal`.
       #
       # Windows has neither `HUP` nor `WINCH`. Its console says Ctrl+Break
       # where a terminal would say neither, and a window that changed size

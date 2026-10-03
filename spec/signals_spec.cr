@@ -476,4 +476,50 @@ Spectator.describe TermBuf::Input::Stream do
       end
     end
   end
+
+  describe "a window change" do
+    # `measure` stands in for the device, which a pipe does not have.
+    it "arrives as a resize of the size the window is now" do
+      with_wired do |wired|
+        wired.stream.measure = -> { TermBuf::Input::ScreenSize.new(100, 30) }
+        wired.install
+        wired.deliver ::Signal::WINCH
+
+        resize = wired.event_of TermBuf::Input::Events::Resize
+        fail "no resize arrived" unless resize
+
+        expect(resize.size).to eq TermBuf::Input::ScreenSize.new(100, 30)
+        expect(resize.previous).to be_nil
+      end
+    end
+
+    it "carries the size it last reported as the previous one" do
+      with_wired do |wired|
+        sizes = [TermBuf::Input::ScreenSize.new(100, 30), TermBuf::Input::ScreenSize.new(90, 20)]
+        wired.stream.measure = -> { sizes.shift }
+        wired.install
+
+        wired.deliver ::Signal::WINCH
+        fail "no first resize arrived" unless wired.event_of TermBuf::Input::Events::Resize
+
+        wired.deliver ::Signal::WINCH
+        second = wired.event_of TermBuf::Input::Events::Resize
+        fail "no second resize arrived" unless second
+
+        expect(second.size).to eq TermBuf::Input::ScreenSize.new(90, 20)
+        expect(second.previous).to eq TermBuf::Input::ScreenSize.new(100, 30)
+      end
+    end
+
+    it "arrives as nothing else" do
+      with_wired do |wired|
+        wired.stream.measure = -> { TermBuf::Input::ScreenSize.new(100, 30) }
+        wired.install
+        wired.deliver ::Signal::WINCH
+
+        fail "no resize arrived" unless wired.event_of TermBuf::Input::Events::Resize
+        expect(wired.event_of(TermBuf::Input::Events::Signal, 100.milliseconds)).to be_nil
+      end
+    end
+  end
 end

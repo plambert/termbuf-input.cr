@@ -1,7 +1,5 @@
-{% if flag?(:win32) %}
-  require "./termbuf-input/win32/lib_console"
-{% end %}
 require "./termbuf-input/key"
+require "./termbuf-input/screen_size"
 require "./termbuf-input/utf8"
 require "./termbuf-input/event"
 require "./termbuf-input/mouse"

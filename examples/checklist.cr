@@ -365,12 +365,12 @@ begin
 
   # ---------------------------------------------------------------- resize
 
-  # Windows has no SIGWINCH to wait for. Its console reports a resize with
-  # the input, which the stream does not deliver yet.
+  # A Windows console reports a resize with the input, which the stream does
+  # not read yet.
   {% unless flag?(:win32) %}
     list.step "resize", "Resize this window by dragging its edge, then let go.",
-      "SIGWINCH, and a size that matches stty size" do |event|
-      next unless event.is_a?(Input::Events::Signal) && event.signal.winch?
+      "a resize, and a size that matches stty size" do |event|
+      next unless event.is_a?(Input::Events::Resize)
 
       # Let the drag finish before asking.
       while harness.next_event(700.milliseconds)
@@ -385,7 +385,7 @@ begin
           {Status::Fail, "the terminal says #{answer.columns} × #{answer.rows}, stty size says #{expected}"}
         end
       else
-        {Status::Pass, "SIGWINCH arrived; the terminal does not report its size"}
+        {Status::Pass, "a resize arrived; the terminal does not report its size"}
       end
     end
   {% end %}
