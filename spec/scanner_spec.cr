@@ -54,6 +54,15 @@ Spectator.describe TermBuf::Input::SequenceScanner do
       expect(scan("\e[?62;22c")).to eq [{Kind::Sequence, "\e[?62;22c"}]
     end
 
+    # Its three bytes are raw values, not parameters; column 81 is a `q`.
+    it "takes an X10 mouse report and its three bytes as one sequence" do
+      expect(scan("\e[M #qx")).to eq [{Kind::Sequence, "\e[M #q"}, {Kind::Text, "x"}]
+    end
+
+    it "waits for the rest of an X10 mouse report" do
+      expect(scan("\e[M #", "qx")).to eq [{Kind::Sequence, "\e[M #q"}, {Kind::Text, "x"}]
+    end
+
     it "ends a sequence at its first final byte" do
       expect(scan("\e[Ax")).to eq [{Kind::Sequence, "\e[A"}, {Kind::Text, "x"}]
     end

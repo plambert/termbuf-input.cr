@@ -117,6 +117,12 @@ module TermBuf
       # `Mouse.decode` answering `nil` leaves the sequence to the key decoder,
       # which is what should happen to a `CSI <` that is not a report.
       private def watch_the_mouse : Pattern
+        # The older X10 encoding too, so that its raw coordinate bytes are not
+        # read as keys. See `Mouse.decode_x10`.
+        @patterns.register(Prefix::CSI, head: "M") do |sequence|
+          Mouse.decode_x10 sequence
+        end
+
         @patterns.register(Prefix::CSI, head: "<") do |sequence|
           Mouse.decode sequence
         end

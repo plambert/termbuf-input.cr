@@ -114,6 +114,38 @@ module TermBuf
           modifiers(code), action(code, final)
       end
 
+      # What an X10 mouse report says the pointer did, or `nil` if *sequence*
+      # is not one.
+      #
+      # `CSI M` and three bytes, each the value plus 32: the button code, the
+      # column and the row. The code is the SGR one, except that a release is
+      # button 3 and does not say which button came up. Nothing here asks for
+      # this encoding; it is decoded so that a terminal sending it is heard as
+      # a mouse rather than as three keys.
+      def self.decode_x10(sequence : Input::Sequence) : Events::Mouse?
+        return unless sequence.prefix.csi?
+
+        bytes = sequence.bytes
+        return unless bytes.size == 6 && bytes[2] == 'M'.ord
+
+        code = bytes[3].to_i - 32
+        column = bytes[4].to_i - 32
+        row = bytes[5].to_i - 32
+        return unless code >= 0 && column >= 1 && row >= 1
+
+        released = code & 0b11 == 3 && !code.bits_set?(WHEEL) && !code.bits_set?(MOTION)
+        action = if released
+                   Action::Release
+                 elsif code.bits_set? MOTION
+                   Action::Motion
+                 else
+                   Action::Press
+                 end
+
+        Events::Mouse.new released ? Button::None : button(code), column - 1, row - 1,
+          modifiers(code), action
+      end
+
       # Which button *code* names.
       #
       # The button lives in the low two bits, and one of two flags above them
