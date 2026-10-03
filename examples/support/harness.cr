@@ -7,7 +7,13 @@ require "../../src/termbuf-input"
 alias Input = TermBuf::Input
 
 class Harness
-  COMMIT = {{ `git rev-parse --short HEAD 2>/dev/null || echo unknown`.stringify.strip }}
+  # Windows runs a macro's command with no shell, so `cmd` is asked for the
+  # fallback there.
+  {% if flag?(:win32) %}
+    COMMIT = {{ `cmd /c "git rev-parse --short HEAD 2>NUL || echo unknown"`.stringify.strip }}
+  {% else %}
+    COMMIT = {{ `git rev-parse --short HEAD 2>/dev/null || echo unknown`.stringify.strip }}
+  {% end %}
 
   # Ctrl+N skips a step and Ctrl+C stops the run. Neither is under test.
   SKIP = Input::Key.parse_one "Ctrl+N"
