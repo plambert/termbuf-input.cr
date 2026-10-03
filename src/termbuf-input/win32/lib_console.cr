@@ -61,4 +61,46 @@ lib LibTermBufConsole
   end
 
   fun GetConsoleScreenBufferInfo(hConsoleOutput : LibC::HANDLE, lpConsoleScreenBufferInfo : ConsoleScreenBufferInfo*) : LibC::BOOL
+
+  # What an input record is, in `InputRecord#event_type`. Mouse, menu and
+  # focus records exist too; nothing here reads them.
+  KEY_EVENT                = 0x0001_u16
+  WINDOW_BUFFER_SIZE_EVENT = 0x0004_u16
+
+  # The Alt key, whose release carries the character an Alt+numpad code
+  # composed.
+  VK_MENU = 0x12_u16
+
+  struct KeyEventRecord
+    key_down : LibC::BOOL
+    repeat_count : UInt16
+    virtual_key_code : UInt16
+    virtual_scan_code : UInt16
+    # A union of a UTF-16 code unit and an 8-bit character in C; the console
+    # fills the UTF-16 side for `ReadConsoleInputW`.
+    unicode_char : UInt16
+    control_key_state : UInt32
+  end
+
+  struct WindowBufferSizeRecord
+    size : Coord
+  end
+
+  # The other members are as large as a key record or smaller, so these two
+  # give the union its size: sixteen bytes, four-byte aligned.
+  union InputEvent
+    key_event : KeyEventRecord
+    window_buffer_size_event : WindowBufferSizeRecord
+  end
+
+  struct InputRecord
+    event_type : UInt16
+    event : InputEvent
+  end
+
+  fun ReadConsoleInputW(hConsoleInput : LibC::HANDLE, lpBuffer : InputRecord*, nLength : LibC::DWORD, lpNumberOfEventsRead : LibC::DWORD*) : LibC::BOOL
+
+  fun CreateEventW(lpEventAttributes : Void*, bManualReset : LibC::BOOL, bInitialState : LibC::BOOL, lpName : UInt16*) : LibC::HANDLE
+  fun SetEvent(hEvent : LibC::HANDLE) : LibC::BOOL
+  fun WaitForMultipleObjects(nCount : LibC::DWORD, lpHandles : LibC::HANDLE*, bWaitAll : LibC::BOOL, dwMilliseconds : LibC::DWORD) : LibC::DWORD
 end

@@ -200,9 +200,9 @@ module TermBuf
 
       # Stops delivering events.
       #
-      # The reader is left where it is, blocked on a device only the owner of
-      # that device can close; it ends when the device does. Nothing it reads
-      # after this reaches anyone.
+      # A Windows console's reader is stopped. Any other reader is left where
+      # it is, blocked on a device only the owner of that device can close; it
+      # ends when the device does. Nothing it reads after this reaches anyone.
       #
       # Signal handlers go back to the default: they are process-global, and
       # one left pointing at a stream nobody is draining would fill the inbound
@@ -213,6 +213,7 @@ module TermBuf
 
         @signals.uninstall
         @timers.clear
+        @reader.stop
         @events.close rescue nil
       end
 
@@ -249,6 +250,9 @@ module TermBuf
         in Signals::Signalled
           signalled message
           true
+        in Reader::Resized
+          resized
+          true
         end
       end
 
@@ -269,11 +273,16 @@ module TermBuf
 
       # The window changed size. Measures it, and sends an `Events::Resize`
       # carrying the size this stream last reported as the previous one.
+      #
+      # Nothing is sent for a size it already reported. A Windows console
+      # reports its buffer, not its window, and says so for changes that leave
+      # the window as it was.
       private def resized : Nil
         size = @measure.call
         previous = @reported
-        @reported = size
+        return if size == previous
 
+        @reported = size
         deliver Events::Resize.new(size, previous)
       end
 

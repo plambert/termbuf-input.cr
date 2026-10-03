@@ -1,5 +1,8 @@
 require "./signals"
 require "./timers"
+{% if flag?(:win32) %}
+  require "./win32/console"
+{% end %}
 
 module TermBuf
   module Input
@@ -22,17 +25,21 @@ module TermBuf
       # Input has ended. Nothing follows it on the channel.
       record Eof
 
+      # The window changed size. Sent by a Windows console, which reports a
+      # resize in its input; a terminal says so with `SIGWINCH` instead.
+      record Resized
+
       # What arrives on the inbound channel. A union rather than plain `Bytes`
       # so that the end of input is a value like any other, and so that a
       # wake-up that came from nowhere near the device has somewhere to go.
       #
-      # The reader itself only ever sends `Bytes` and one `Eof`. A
+      # The reader itself only ever sends `Bytes`, `Resized` and one `Eof`. A
       # `Timers::Tick` comes from a timer fibre and a `Signals::Signalled` from
       # Crystal's signal fibre, and both arrive here rather than on channels of
       # their own so that they are ordered against the bytes: what the terminal
       # said before a timer was armed, or before a signal landed, is always
       # dispatched before it.
-      alias Inbound = Bytes | Timers::Tick | Signals::Signalled | Eof
+      alias Inbound = Bytes | Timers::Tick | Signals::Signalled | Resized | Eof
 
       # What has been read, in the order it was read.
       getter inbound : Channel(Inbound)
@@ -41,6 +48,11 @@ module TermBuf
       getter? started : Bool = false
 
       @context : Fiber::ExecutionContext::Isolated?
+
+      {% if flag?(:win32) %}
+        # The console being read, when the device is one.
+        @console : Console? = nil
+      {% end %}
 
       # Builds a reader over *io*, which is not read from until `#start`.
       #
@@ -59,11 +71,33 @@ module TermBuf
         return if @started
         @started = true
 
+        {% if flag?(:win32) %}
+          # A console is read record by record, which is what reports a resize
+          # and what can be stopped. See `Console`.
+          if @blocking && (console = Console.for? @io)
+            @console = console
+            @context = Fiber::ExecutionContext::Isolated.new("termbuf-input") { run_console console }
+            return
+          end
+        {% end %}
+
         if @blocking
           @context = Fiber::ExecutionContext::Isolated.new("termbuf-input") { run }
         else
           spawn(name: "termbuf-input") { run }
         end
+      end
+
+      # Stops reading, where the device allows it.
+      #
+      # A Windows console's read is woken and ends. A read from anything else
+      # stays blocked until the device has something to say or closes, since
+      # nothing can wake a blocked read portably; what it reads after this
+      # goes nowhere.
+      def stop : Nil
+        {% if flag?(:win32) %}
+          @console.try &.stop
+        {% end %}
       end
 
       private def run : Nil
@@ -84,6 +118,26 @@ module TermBuf
       ensure
         @inbound.send Eof.new rescue nil
       end
+
+      {% if flag?(:win32) %}
+        private def run_console(console : Console) : Nil
+          loop do
+            batch = console.read
+            next unless batch
+
+            @inbound.send batch.bytes unless batch.bytes.empty?
+            @inbound.send Resized.new if batch.resized
+          end
+        rescue Console::Stopped
+          # `#stop` was called.
+        rescue IO::Error
+          # The console went away, which is an ending like any other.
+        rescue Channel::ClosedError
+          # Nobody is decoding any more.
+        ensure
+          @inbound.send Eof.new rescue nil
+        end
+      {% end %}
     end
   end
 end
