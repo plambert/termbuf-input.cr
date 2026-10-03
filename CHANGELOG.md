@@ -6,8 +6,58 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+This release runs on Windows, in Windows Terminal and in WezTerm. Both host a program in a Windows
+console, and the console's input is read directly.
+
+### Added
+
+- Windows support. On Windows the reader reads the console's input records, so it sees a resize
+  and can be stopped, and holds a surrogate pair split across two reads until its second half
+  comes. `Input::Console` does the reading; its `Translator` turns keys going down, the character
+  Alt+numpad composes, and repeat counts into the bytes a terminal would send.
+- `Events::Resize`, with the new size and the size reported before it (`nil` the first time). The
+  stream sends it when the window changes size, from SIGWINCH on POSIX and from the console's
+  resize records on Windows. It skips a size already reported. `Stream#measure` says how the size
+  is taken; it is `SizeDetector.detect` unless set.
+- `Input::ScreenSize` and `Input::SizeDetector`, moved from termbuf, which aliases them. On Windows
+  the size comes from the console's screen buffer.
+- `Input::RawMode`, moved from termbuf's `Tty`, so a program that reads keys with this shard alone
+  can turn raw mode on and put the terminal back as it found it. On Windows it turns on virtual
+  terminal input and window input, and turns off line input, echo, quick edit and the console's own
+  mouse input. With mouse input on, the console asks the terminal for mouse tracking on its own and
+  passes the reports to the program, which never asked for them.
+- Console control events on Windows. Ctrl+C is `INT` and Ctrl+Break is `BREAK`, handled by their
+  modes as signals are on POSIX; `Mode::Exit` exits with `0xC000013A`, the status of a console
+  program stopped by Ctrl+C. Closing the console, logging off and shutting down run the
+  `before_exit` hooks, and the handler waits up to 4.5 seconds for them, because Windows ends the
+  process as soon as it returns. WezTerm's kill-pane ends the process without an event, so no hook
+  runs there.
+- `before_exit` hooks receive a `Departure`: `Signalled`, or `Disconnected` when the terminal has
+  gone. A block that takes no argument still works.
+- X10 mouse reports, `CSI M` and three raw bytes, decode to `Events::Mouse` through
+  `Mouse.decode_x10`. They used to become keys; column 81 is a `q`.
+- `Input::PseudoConsole`, for specs on Windows: it runs a program in a Windows console the spec
+  plays the terminal for, types into it, resizes it and reads its screen, with no window. It is not
+  required by default; require `termbuf-input/win32/pseudo_console`.
+- `TERMBUF_INPUT_UNATTENDED` makes the examples' harness skip every question meant for a person.
+
+### Changed
+
+- The stream sends `Events::Resize` in place of `Events::Signal` for `WINCH`.
+- A query left unanswered when the sentinel's reply arrives still takes its answer for
+  `Queries::LATE_GRACE`, 500ms, delivered after the `Events::Unanswered`. A Windows console answers
+  the device attributes itself and passes other queries on to the terminal, so their answers can
+  come after; WezTerm's XTVERSION answer came 34ms late and was read as keys, Alt+P among them.
+- On Windows, `DEFAULT_MODES` are `TERM`, `INT` and `BREAK`, since Windows has neither `HUP` nor
+  `WINCH`.
+- The examples use `RawMode` instead of `stty`, and the checklist's resize step runs on Windows.
+  The report names Windows Terminal from `WT_SESSION`.
+
 ### Fixed
 
+- A sequence body that is not UTF-8, such as an X10 mouse report past column 95, no longer stops
+  the dispatcher. The reply parsers' regular expressions raised on it; `Sequence.parse` now scrubs
+  the body, and `Sequence#bytes` keeps the bytes as they came.
 - `VERSION` is read on Windows too. The compiler runs a macro's command there with no shell, so the
   single quotes around the shard's directory reached `shards` as part of the path, and every build
   that required this shard stopped there. Windows gets the directory in double quotes, which its
