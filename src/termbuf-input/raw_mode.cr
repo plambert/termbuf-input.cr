@@ -18,7 +18,8 @@ module TermBuf
     # a *cooked* terminal rather than the one it found, which is not the same
     # thing when the program was started from something other than an ordinary
     # shell. And on Windows it leaves out what a console needs for a resize to
-    # be reported and for the mouse to reach the program.
+    # be reported, and leaves the console free to report the mouse when the
+    # program has not asked.
     #
     #     raw = Input::RawMode.new STDIN, STDOUT
     #     raw.enter
@@ -139,6 +140,14 @@ module TermBuf
         # the mouse in a classic console window selects text instead of
         # reaching the program.
         #
+        # Mouse input off. With it on, the console asks the terminal behind it
+        # for mouse tracking on its own account and passes the reports to the
+        # program, which then gets mouse reports it never turned on. Measured
+        # on 2026-10-03 in WezTerm 20240203: 290 reports in three seconds of
+        # movement with no mouse mode set, none with mouse input off. A mode
+        # the program turns on still reports with it off: 307 reports in
+        # WezTerm and 379 in Windows Terminal 1.24 under 1003 with 1006.
+        #
         # Output: escape sequences understood, and a line feed that does not
         # return the cursor, so the bottom right cell can be written without
         # scrolling the screen.
@@ -155,7 +164,7 @@ module TermBuf
 
           raw = input_mode
           raw &= ~(LibC::ENABLE_PROCESSED_INPUT | LibC::ENABLE_LINE_INPUT | LibC::ENABLE_ECHO_INPUT |
-                   LibTermBufConsole::ENABLE_QUICK_EDIT_MODE)
+                   LibTermBufConsole::ENABLE_QUICK_EDIT_MODE | LibTermBufConsole::ENABLE_MOUSE_INPUT)
           raw |= LibC::ENABLE_VIRTUAL_TERMINAL_INPUT | LibTermBufConsole::ENABLE_WINDOW_INPUT |
                  LibTermBufConsole::ENABLE_EXTENDED_FLAGS
           LibC.SetConsoleMode input, raw
