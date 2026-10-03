@@ -7,7 +7,7 @@ require "./spec_helper"
 {% skip_file unless flag?(:win32) %}
 
 require "file_utils"
-require "./support/conpty"
+require "../src/termbuf-input/win32/pseudo_console"
 
 private module Target
   # Built once, the first time it is wanted. The compile takes a while.
@@ -35,12 +35,12 @@ end
 
 # A console running the target, and the log it writes.
 private class Session
-  getter console : PseudoConsole
+  getter console : TermBuf::Input::PseudoConsole
   getter log : Path
 
   def initialize(columns = 80, rows = 24)
     @log = Target.path.parent / "log-#{Random.rand UInt32}.txt"
-    @console = PseudoConsole.new Target.path.to_s, [@log.to_s], columns, rows
+    @console = TermBuf::Input::PseudoConsole.new Target.path.to_s, [@log.to_s], columns, rows
   end
 
   def lines : Array(String)
