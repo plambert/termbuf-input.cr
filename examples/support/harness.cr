@@ -55,12 +55,12 @@ class Harness
   # What arrived unrecognised during the last `#ask`, if anything did.
   @garbled : String? = nil
 
-  @saved : String
+  @raw : Input::RawMode
   @alternate : Bool
 
   def initialize(@program : String)
-    @saved = stty "-g"
-    stty "raw", "-echo"
+    @raw = Input::RawMode.new STDIN, STDOUT
+    @raw.enter
 
     @stream = Input::Stream.new STDIN, blocking: true
     @modes = Input::Modes.new STDOUT
@@ -72,18 +72,15 @@ class Harness
     @stream.start
   end
 
-  def stty(*args : String) : String
-    output = IO::Memory.new
-    Process.run "stty", args.to_a, input: Process::Redirect::Inherit, output: output
-    output.to_s.strip
-  end
-
-  # What `stty size` says, as columns and rows.
-  def stty_size : {Int32, Int32}?
-    rows, columns = stty("size").split.map &.to_i
-    {columns, rows}
-  rescue
-    nil
+  # The size the device says it is, as columns and rows: the kernel's on a
+  # terminal, the console's on Windows. `nil` when it says nothing and the
+  # size is only a guess.
+  def device_size : {Int32, Int32}?
+    {% if flag?(:win32) %}
+      Input::SizeDetector.from_console.try { |known| {known.columns, known.rows} }
+    {% else %}
+      Input::SizeDetector.from_ioctl.try { |known| {known.columns, known.rows} }
+    {% end %}
   end
 
   def say(text : String = "") : Nil
@@ -183,7 +180,12 @@ class Harness
   end
 
   # Waits for y, n or Ctrl+N, and answers `Pass`, `Fail` or `Skip`.
+  #
+  # With `TERMBUF_INPUT_UNATTENDED` set, answers `Skip` without waiting, so
+  # that a script can run the checks that need nobody and collect the report.
   def confirm : Status
+    return Status::Skip if ENV["TERMBUF_INPUT_UNATTENDED"]?
+
     loop do
       event = next_event 10.minutes
       next unless event.is_a?(Input::Events::Key)
@@ -198,7 +200,7 @@ class Harness
   def restore : Nil
     @modes.reset
     leave_alternate
-    stty @saved
+    @raw.leave
   end
 
   # Puts the terminal back, prints the results, and writes the report.
@@ -219,7 +221,7 @@ class Harness
   private def write_report(io : IO, stopped : Bool) : Nil
     io.puts "termbuf-input #{Input::VERSION} (#{COMMIT}) examples/#{@program}.cr"
     io.puts "TERM=#{ENV["TERM"]?} TERM_PROGRAM=#{ENV["TERM_PROGRAM"]?} TERM_PROGRAM_VERSION=#{ENV["TERM_PROGRAM_VERSION"]?}"
-    io.puts "TMUX=#{ENV["TMUX"]? ? "set" : "unset"} #{Time.local.to_s "%F %T %z"}"
+    io.puts "TMUX=#{ENV["TMUX"]? ? "set" : "unset"} WT_SESSION=#{ENV["WT_SESSION"]? ? "set" : "unset"} #{Time.local.to_s "%F %T %z"}"
     io.puts "stopped early with Ctrl+C" if stopped
     io.puts
     io.puts "PASS as expected. FAIL a bug, here or in the terminal. UNSUPPORTED the terminal does not"
@@ -248,7 +250,8 @@ class Harness
   end
 
   private def terminal_slug : String
-    name = ENV["TERM_PROGRAM"]? || ENV["TERM"]? || "unknown"
+    # Windows Terminal sets neither TERM_PROGRAM nor TERM, only WT_SESSION.
+    name = ENV["TERM_PROGRAM"]? || (ENV["WT_SESSION"]? && "windows-terminal") || ENV["TERM"]? || "unknown"
     name.downcase.gsub(/[^a-z0-9]+/, "-").strip('-')
   end
 end

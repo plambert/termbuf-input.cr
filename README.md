@@ -30,20 +30,18 @@ dependencies:
     github: plambert/termbuf-input.cr
 ```
 
-A stream owns the device only for reading. Raw mode is someone else's to turn on and to put back;
-the `stty` calls below are what that looks like with nothing else in the program. `Modes` turns on
-what the terminal reports, here bracketed paste and focus, and `#reset` turns it off again.
+A stream owns the device only for reading. Raw mode is turned on and put back on its own, with
+`RawMode`, which restores exactly the modes it found and, on Windows, sets what a console needs for
+a resize to be reported. `Modes` turns on what the terminal reports, here bracketed paste and focus,
+and `#reset` turns it off again.
 
 ```crystal
 require "termbuf-input"
 
 alias Input = TermBuf::Input
 
-def stty(*args : String) : Nil
-  Process.run "stty", args.to_a, input: Process::Redirect::Inherit
-end
-
-stty "raw", "-echo"
+raw = Input::RawMode.new STDIN, STDOUT
+raw.enter
 
 modes = Input::Modes.new STDOUT
 modes.enable Input::Mode::BRACKETED_PASTE
@@ -68,7 +66,7 @@ end
 
 stream.close
 modes.reset
-stty "sane"
+raw.leave
 ```
 
 `blocking:` says whether a read on this device blocks the thread it runs on. A terminal does, and
@@ -263,7 +261,7 @@ and screen.
 
 | Program | Does |
 | --- | --- |
-| `examples/queries.cr` | Asks every query and checks what it can: the cursor against where it was put, the size against `stty size`, the pixel sizes against each other. Asks you to compare the colours with swatches |
+| `examples/queries.cr` | Asks every query and checks what it can: the cursor against where it was put, the size against what the device says, the pixel sizes against each other. Asks you to compare the colours with swatches |
 | `examples/checklist.cr` | Walks through keys, paste, focus, the mouse, the kitty keyboard protocol, modifyOtherKeys and resizing, saying what to do and what should arrive. A failed step offers a retry |
 | `examples/events.cr` | Prints every event and toggles the modes from the keyboard. Judges nothing |
 
