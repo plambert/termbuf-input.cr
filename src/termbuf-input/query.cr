@@ -98,6 +98,17 @@ module TermBuf
       # Asked after every query, to mark where its answer would have ended.
       SENTINEL = "\e[c"
 
+      # How long a query called unanswered still takes its answer.
+      #
+      # The sentinel's reply is taken to mean every answer before it is in,
+      # which holds for a terminal and not for a Windows console in front of
+      # one. The console answers the device attributes itself, at once, and
+      # passes other queries on to the terminal hosting it: measured against
+      # WezTerm 20240203, its XTVERSION reply came 34 milliseconds after the
+      # console's. Such an answer is still delivered, after the
+      # `Events::Unanswered`, rather than reaching the key decoder as keys.
+      LATE_GRACE = 500.milliseconds
+
       private class Entry
         getter query : Query
         property? answered : Bool = false
@@ -106,7 +117,15 @@ module TermBuf
         end
       end
 
+      # A query called unanswered, and until when it still takes an answer.
+      private record Late, query : Query, until : Time::Instant
+
       @watching : Array(Pattern)
+
+      # See `LATE_GRACE`. Replaceable for the specs.
+      property late_grace : Time::Span = LATE_GRACE
+
+      @late = Deque(Late).new
 
       # Reads the answers through *patterns* and writes the questions to
       # *output*.
@@ -169,7 +188,10 @@ module TermBuf
       # Forgets every outstanding query. A late answer then arrives as whatever
       # the patterns and the key decoder make of it.
       def clear : Nil
-        @state.synchronize { @pending.clear }
+        @state.synchronize do
+          @pending.clear
+          @late.clear
+        end
       end
 
       # Stops reading answers, and forgets every outstanding query.
@@ -185,7 +207,7 @@ module TermBuf
       private def answer(sequence : Sequence) : Event?
         @state.synchronize do
           entry = @pending.first?
-          return unless entry
+          return late(sequence) unless entry
 
           unless entry.answered?
             if event = entry.query.decode sequence
@@ -195,11 +217,30 @@ module TermBuf
           end
 
           attributes = Replies.device_attributes sequence
-          return if attributes.nil? || attributes.secondary
+          return late(sequence) if attributes.nil? || attributes.secondary
 
           @pending.shift
-          entry.answered? ? Claimed.new : Events::Unanswered.new(entry.query)
+          return Claimed.new if entry.answered?
+
+          @late << Late.new(entry.query, Time.instant + @late_grace)
+          Events::Unanswered.new(entry.query)
         end
+      end
+
+      # The answer to a query already called unanswered, if *sequence* is one
+      # and the query is still within its grace. The caller holds the lock.
+      private def late(sequence : Sequence) : Event?
+        now = Time.instant
+        @late.reject! { |waiting| waiting.until <= now }
+
+        @late.each_with_index do |waiting, index|
+          if event = waiting.query.decode sequence
+            @late.delete_at index
+            return event
+          end
+        end
+
+        nil
       end
     end
   end
