@@ -1,3 +1,6 @@
+# Windows only. Without this, `crystal docs` elsewhere compiles it and fails.
+{% skip_file unless flag?(:win32) %}
+
 require "./lib_console"
 
 module TermBuf

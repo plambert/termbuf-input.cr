@@ -1,3 +1,6 @@
+# Windows only. Without this, `crystal docs` elsewhere compiles it and fails.
+{% skip_file unless flag?(:win32) %}
+
 # The parts of the Windows console API that Crystal's own `LibC` does not
 # bind: the screen buffer's geometry, and the console mode flags beyond the
 # few the standard library uses itself.
