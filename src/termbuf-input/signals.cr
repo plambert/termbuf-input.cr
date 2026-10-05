@@ -1,4 +1,7 @@
 require "./reader"
+{% if flag?(:win32) %}
+  require "./win32/console_control"
+{% end %}
 
 module TermBuf
   module Input
@@ -20,7 +23,27 @@ module TermBuf
     # this expects; a second `#install` replaces the first's handlers, and
     # `#uninstall` puts every signal it traps back to the default. Anything
     # installing traps must uninstall them, specs included.
+    #
+    # Windows has no signals to trap. Its console's control events stand in
+    # for them: Ctrl+C is `INT` and Ctrl+Break is `BREAK`, each handled by its
+    # mode as a signal would be. The console closing, the user logging off and
+    # the system shutting down cannot be survived and have no mode: the
+    # `#before_exit` hooks run with `Departure::Disconnected`, and Windows ends
+    # the process when they are done. See `ConsoleControl`.
     class Signals
+      # Why the `#before_exit` hooks are running.
+      enum Departure
+        # A signal whose mode said to exit arrived. The terminal is still
+        # there and is worth giving back.
+        Signalled
+
+        # The terminal went away: on Windows, the console closed, the user
+        # logged off or the system is shutting down. There is nothing to give
+        # back, and only what the application needs to write down is worth the
+        # few seconds left.
+        Disconnected
+      end
+
       # What a delivered signal does.
       enum Mode
         # Run the `#before_exit` hooks, reset the signal, and re-raise it, so
@@ -49,13 +72,26 @@ module TermBuf
       # The three that mean "stop" restore the terminal on the way out. `WINCH`
       # is an event because it is not a shutdown at all, and because the
       # application — or, in this shard, the terminal driver — is the only one
-      # who knows what to do about a window that changed size.
-      DEFAULT_MODES = {
-        ::Signal::TERM  => Mode::Exit,
-        ::Signal::INT   => Mode::Exit,
-        ::Signal::HUP   => Mode::Exit,
-        ::Signal::WINCH => Mode::Event,
-      }
+      # who knows what to do about a window that changed size. The stream turns
+      # it into an `Events::Resize` rather than an `Events::Signal`.
+      #
+      # Windows has neither `HUP` nor `WINCH`. Its console says Ctrl+Break
+      # where a terminal would say neither, and a window that changed size
+      # comes in with the input, not as a signal.
+      {% if flag?(:win32) %}
+        DEFAULT_MODES = {
+          ::Signal::TERM  => Mode::Exit,
+          ::Signal::INT   => Mode::Exit,
+          ::Signal::BREAK => Mode::Exit,
+        }
+      {% else %}
+        DEFAULT_MODES = {
+          ::Signal::TERM  => Mode::Exit,
+          ::Signal::INT   => Mode::Exit,
+          ::Signal::HUP   => Mode::Exit,
+          ::Signal::WINCH => Mode::Event,
+        }
+      {% end %}
 
       # How many deliveries `Mode::WarnThenExit` takes before it exits, when
       # nothing has said otherwise.
@@ -68,18 +104,30 @@ module TermBuf
       # run: reset the signal and send it again, so the process dies of what it
       # was sent rather than of `exit`.
       #
+      # Windows cannot send a process a signal, so there it exits with the
+      # status a console program interrupted by Ctrl+C has, `0xC000013A`.
+      #
       # Replaceable so that a spec can watch an exit happen without being
       # killed by it. Nothing else has a reason to.
-      property terminate : Proc(::Signal, Nil) = ->(signal : ::Signal) do
-        signal.reset
-        Process.signal signal, Process.pid
-      end
+      {% if flag?(:win32) %}
+        property terminate : Proc(::Signal, Nil) = ->(signal : ::Signal) do
+          Process.exit STATUS_CONTROL_C_EXIT
+        end
+
+        # `0xC000013A` as the signed status `Process.exit` takes.
+        STATUS_CONTROL_C_EXIT = -1073741510
+      {% else %}
+        property terminate : Proc(::Signal, Nil) = ->(signal : ::Signal) do
+          signal.reset
+          Process.signal signal, Process.pid
+        end
+      {% end %}
 
       @modes : Hash(::Signal, Mode)
       @thresholds = {} of ::Signal => Int32
       @counts = {} of ::Signal => Int32
       @hooks = {} of ::Signal => Proc(Nil)
-      @before_exit = [] of Proc(Nil)
+      @before_exit = [] of Proc(Departure, Nil)
 
       def initialize(@inbound : Channel(Reader::Inbound))
         @mutex = Mutex.new
@@ -141,13 +189,18 @@ module TermBuf
 
       # ----------------------------------------------------------- the hooks
 
-      # Registers something to run before the process dies of a signal.
+      # Registers something to run before the process dies of a signal, or
+      # of its terminal going away.
       #
       # Hooks run in the order they were registered, in the signal handler
       # itself, and each is rescued: one that raises does not stop the ones
-      # after it, which is the whole point of a stack of them. This shard
+      # after it, which is the whole point of a stack of them. termbuf
       # registers the terminal's restore.
-      def before_exit(&hook : ->) : Nil
+      #
+      # A hook is told why, as a `Departure`, and may ignore it. termbuf's
+      # restore does nothing for `Departure::Disconnected`, since there is no
+      # terminal left to restore.
+      def before_exit(&hook : Departure ->) : Nil
         @mutex.synchronize { @before_exit << hook }
         nil
       end
@@ -171,7 +224,8 @@ module TermBuf
 
       # ------------------------------------------------------- installing
 
-      # Traps every signal that has a mode or a hook.
+      # Traps every signal that has a mode or a hook. On Windows, registers
+      # for the console's control events instead.
       def install : Nil
         signals = [] of ::Signal
 
@@ -182,7 +236,11 @@ module TermBuf
           end
         end
 
-        signals.each { |signal| trap signal }
+        {% if flag?(:win32) %}
+          ConsoleControl.start { |event| console_event event } unless signals.empty?
+        {% else %}
+          signals.each { |signal| trap signal }
+        {% end %}
       end
 
       # Puts every signal this traps back to the default.
@@ -199,7 +257,11 @@ module TermBuf
           end
         end
 
-        signals.each &.reset
+        {% if flag?(:win32) %}
+          ConsoleControl.stop unless signals.empty?
+        {% else %}
+          signals.each &.reset
+        {% end %}
       end
 
       # :ditto:
@@ -214,9 +276,30 @@ module TermBuf
 
       # ------------------------------------------------------------ handling
 
+      # Windows traps nothing: `ConsoleControl` hears every control event once
+      # it has started, and `#console_event` decides what each one is.
       private def trap(signal : ::Signal) : Nil
-        signal.trap { handle signal }
+        {% unless flag?(:win32) %}
+          signal.trap { handle signal }
+        {% end %}
       end
+
+      {% if flag?(:win32) %}
+        # What a console control event does. Runs on `ConsoleControl`'s thread.
+        #
+        # Public for the specs, which have no console to press Ctrl+C in.
+        # Nothing else calls it.
+        def console_event(event : UInt32) : Nil
+          case event
+          when ConsoleControl::CTRL_C_EVENT     then handle ::Signal::INT
+          when ConsoleControl::CTRL_BREAK_EVENT then handle ::Signal::BREAK
+          else
+            # Closing, logging off, shutting down. Windows ends the process
+            # once this returns, whatever anything decides.
+            run_hooks Departure::Disconnected
+          end
+        end
+      {% end %}
 
       # What a delivered signal does. Runs in Crystal's signal fibre.
       private def handle(signal : ::Signal) : Nil
@@ -256,18 +339,21 @@ module TermBuf
 
       # Gives everything back and dies of the signal.
       private def depart(signal : ::Signal) : Nil
+        run_hooks Departure::Signalled
+        @terminate.call signal
+      end
+
+      private def run_hooks(departure : Departure) : Nil
         hooks = @mutex.synchronize { @before_exit.dup }
 
         hooks.each do |hook|
-          hook.call
+          hook.call departure
         rescue
           # One hook failing is no reason to skip the rest: what they are for
           # is giving things back, and the ones after it have their own to
           # give. Nothing is written about it either — the screen belongs to
           # the application, and this is the moment it is being handed back.
         end
-
-        @terminate.call signal
       end
 
       private def retrap(signal : ::Signal) : Nil

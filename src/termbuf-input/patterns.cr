@@ -94,8 +94,11 @@ module TermBuf
                  Prefix::Other
                end
 
+        # Scrubbed: an X10 mouse report past column or row 95 carries bytes
+        # that are not UTF-8, and the patterns match bodies with regular
+        # expressions, which raise on those. *bytes* keeps them as they came.
         offset = {kind.introducer_size, bytes.size}.min
-        Sequence.new bytes, kind, String.new(bytes[offset..]), final_byte(kind, bytes)
+        Sequence.new bytes, kind, String.new(bytes[offset..]).scrub, final_byte(kind, bytes)
       end
 
       # :nodoc:

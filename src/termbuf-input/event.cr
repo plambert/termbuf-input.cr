@@ -2,6 +2,7 @@ require "./key"
 require "./mouse"
 require "./focus"
 require "./timers"
+require "./screen_size"
 
 module TermBuf::Input
   # Anything the terminal has to say, in the order it happened.
@@ -197,13 +198,31 @@ module TermBuf::Input
       include Event
     end
 
+    # The window changed size.
+    #
+    # *size* is the size it is now. *previous* is the size it was, when
+    # whoever sent this knew: the stream reports the size it last reported,
+    # and nothing the first time. Asking the terminal after the fact only ever
+    # gives the size it is already at, so an application that scales or
+    # scrolls to follow the change needs this to know which way it went.
+    #
+    # The stream sends one when the operating system says the window changed:
+    # `SIGWINCH` on a terminal, a window buffer size record in a Windows
+    # console's input. termbuf's `:resize` stage consumes that one, resizes its
+    # buffer, and injects another with its own previous size once the buffer
+    # matches, so an application under termbuf only ever sees a resize the
+    # buffer has already followed.
+    record Resize, size : ScreenSize, previous : ScreenSize? = nil do
+      include Event
+    end
+
     # A signal arrived and the application is the one to act on it.
     #
     # Only for the signals whose mode is `Input::Signals::Mode::Event` or
     # `WarnThenExit`; the ones that mean "stop" restore the terminal and re-
-    # raise themselves without ever reaching a channel. `SIGWINCH` is an event
-    # by default and arrives like any other, unless a stage takes it: termbuf's
-    # `:resize` consumes it and sends a resize event of its own in its place.
+    # raise themselves without ever reaching a channel. `SIGWINCH` is the
+    # exception: it is an event by default, and arrives as an `Events::Resize`
+    # instead of as one of these.
     #
     # *count* is how many of this signal have arrived since the count was last
     # cleared, counting from one. Under `WarnThenExit` it is what the warning

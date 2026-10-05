@@ -28,12 +28,6 @@ MICE = [
   {"SGR clicks only (1000)", Input::Mode::MOUSE_SGR_CLICKS},
 ]
 
-def stty(*args : String) : String
-  output = IO::Memory.new
-  Process.run "stty", args.to_a, input: Process::Redirect::Inherit, output: output
-  output.to_s.strip
-end
-
 def say(text : String) : Nil
   print text.gsub("\n", "\r\n"), "\r\n"
   STDOUT.flush
@@ -76,8 +70,8 @@ def describe(event : Input::Event) : String
   end
 end
 
-saved = stty "-g"
-stty "raw", "-echo"
+raw = Input::RawMode.new STDIN, STDOUT
+raw.enter
 
 stream = Input::Stream.new STDIN, blocking: true
 modes = Input::Modes.new STDOUT
@@ -85,7 +79,7 @@ queries = Input::Queries.new stream, STDOUT
 
 restore = -> do
   modes.reset
-  stty saved
+  raw.leave
 end
 
 stream.signals.before_exit { restore.call }

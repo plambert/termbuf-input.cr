@@ -81,13 +81,13 @@ begin
   case answer = harness.ask Input::Query::TEXT_AREA_SIZE
   when Input::Events::TextAreaSize
     cells = {answer.columns, answer.rows}
-    expected = harness.stty_size
+    expected = harness.device_size
     if expected.nil?
-      harness.record Status::Info, "text area size", "#{answer.columns} × #{answer.rows}; stty size failed"
+      harness.record Status::Info, "text area size", "#{answer.columns} × #{answer.rows}; the device did not say"
     elsif cells == expected
-      harness.record Status::Pass, "text area size", "#{answer.columns} × #{answer.rows}, as stty size says"
+      harness.record Status::Pass, "text area size", "#{answer.columns} × #{answer.rows}, as the device says"
     else
-      harness.record Status::Fail, "text area size", "#{answer.columns} × #{answer.rows}; stty size says #{expected[0]} × #{expected[1]}"
+      harness.record Status::Fail, "text area size", "#{answer.columns} × #{answer.rows}; the device says #{expected[0]} × #{expected[1]}"
     end
   else
     harness.no_answer "text area size"

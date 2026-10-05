@@ -19,9 +19,7 @@ module TermBuf
     #     alias Event = TermBuf::Input::Event
     #
     #     handler = ->(event : Event, emit : Proc(Event, Nil)) do
-    #       signal = event.as? TermBuf::Input::Events::Signal
-    #
-    #       if signal && signal.signal.winch?
+    #       if event.is_a? TermBuf::Input::Events::Resize
     #         # Consumed: something else answers a window change.
     #       else
     #         emit.call event

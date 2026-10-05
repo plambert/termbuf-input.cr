@@ -142,7 +142,18 @@ module TermBuf
       end
 
       # A control sequence runs to the first byte in the final range.
+      #
+      # Except an X10 mouse report, `CSI M` and three bytes: the button, the
+      # column and the row, each plus 32. Those three are raw bytes, not a
+      # parameter, and read as text they are keys nobody pressed; column 81 is
+      # a `q`. A terminal sends one when mouse tracking is on without SGR
+      # encoding, which happens under a Windows console that asked for the
+      # mouse on its own account.
       private def csi_length(data : Bytes) : Int32?
+        if data.size > 2 && data[2] == 'M'.ord
+          return data.size < 6 ? 0 : 6
+        end
+
         index = 2
 
         while index < data.size

@@ -53,7 +53,44 @@ private def with_pointer(&)
   end
 end
 
+private def x10(text : String) : TermBuf::Input::Events::Mouse?
+  TermBuf::Input::Mouse.decode_x10 TermBuf::Input::Sequence.parse(text.to_slice)
+end
+
 Spectator.describe TermBuf::Input::Mouse do
+  # `CSI M` and three bytes, each the value plus 32.
+  describe ".decode_x10" do
+    it "reads a press" do
+      mouse = x10("\e[M #'")
+      fail "no mouse" unless mouse
+
+      expect(mouse.button).to eq Button::Left
+      expect(mouse.action).to eq Action::Press
+      expect(mouse.x).to eq 2
+      expect(mouse.y).to eq 6
+    end
+
+    it "reads a release, which does not say which button" do
+      mouse = x10("\e[M#!!")
+      fail "no mouse" unless mouse
+
+      expect(mouse.button).to eq Button::None
+      expect(mouse.action).to eq Action::Release
+    end
+
+    it "reads a motion with no button held" do
+      mouse = x10("\e[MCq!")
+      fail "no mouse" unless mouse
+
+      expect(mouse.action).to eq Action::Motion
+      expect(mouse.x).to eq 80
+    end
+
+    it "says nothing about an SGR report" do
+      expect(x10("\e[<0;1;1M")).to be_nil
+    end
+  end
+
   describe "what happened" do
     it "reads a press" do
       event = report "\e[<0;10;5M"
@@ -230,6 +267,45 @@ Spectator.describe TermBuf::Input::Mouse do
         expect(mouse.action).to eq Action::Press
         expect(mouse.x).to eq 11
         expect(mouse.y).to eq 6
+      end
+    end
+
+    # Under a Windows console that asked for the mouse itself, motion can
+    # arrive in this encoding, and its bytes used to arrive as keys.
+    it "delivers an X10 report as an event, not as keys" do
+      with_pointer do |pointer|
+        pointer.send "\e[MCq!"
+        event = pointer.event
+
+        expect(event).to be_a TermBuf::Input::Events::Mouse
+        expect(event.as(TermBuf::Input::Events::Mouse).action).to eq Action::Motion
+        expect(pointer.event(100.milliseconds)).to be_nil
+      end
+    end
+
+    # Columns and rows past 95 are bytes past 0x7F, which are not UTF-8.
+    it "delivers an X10 report far into the window" do
+      with_pointer do |pointer|
+        # Button 0 + 32, column 200 + 32, row 100 + 32, which are x 199 and
+        # y 99 counted from zero.
+        pointer.send String.new(Bytes[0x1B, '['.ord, 'M'.ord, 32, 232, 132])
+        event = pointer.event
+
+        expect(event).to be_a TermBuf::Input::Events::Mouse
+        mouse = event.as(TermBuf::Input::Events::Mouse)
+        expect(mouse.x).to eq 199
+        expect(mouse.y).to eq 99
+      end
+    end
+
+    # A coordinate of zero is not a report, so this one falls through every
+    # pattern, the reply parsers among them, with its byte past 0x7F.
+    it "survives an X10 report it cannot read" do
+      with_pointer do |pointer|
+        # A query out, so the reply parsers look at the sequence too.
+        TermBuf::Input::Queries.new(pointer.stream, IO::Memory.new).ask TermBuf::Input::Query::CURSOR_POSITION
+        pointer.send String.new(Bytes[0x1B, '['.ord, 'M'.ord, 32, 32, 0xFF])
+        expect(pointer.event).to be_a TermBuf::Input::Events::Key
       end
     end
 

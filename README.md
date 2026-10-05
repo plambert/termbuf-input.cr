@@ -30,20 +30,18 @@ dependencies:
     github: plambert/termbuf-input.cr
 ```
 
-A stream owns the device only for reading. Raw mode is someone else's to turn on and to put back;
-the `stty` calls below are what that looks like with nothing else in the program. `Modes` turns on
-what the terminal reports, here bracketed paste and focus, and `#reset` turns it off again.
+A stream owns the device only for reading. Raw mode is turned on and put back on its own, with
+`RawMode`, which restores exactly the modes it found and, on Windows, sets what a console needs for
+a resize to be reported. `Modes` turns on what the terminal reports, here bracketed paste and focus,
+and `#reset` turns it off again.
 
 ```crystal
 require "termbuf-input"
 
 alias Input = TermBuf::Input
 
-def stty(*args : String) : Nil
-  Process.run "stty", args.to_a, input: Process::Redirect::Inherit
-end
-
-stty "raw", "-echo"
+raw = Input::RawMode.new STDIN, STDOUT
+raw.enter
 
 modes = Input::Modes.new STDOUT
 modes.enable Input::Mode::BRACKETED_PASTE
@@ -68,7 +66,7 @@ end
 
 stream.close
 modes.reset
-stty "sane"
+raw.leave
 ```
 
 `blocking:` says whether a read on this device blocks the thread it runs on. A terminal does, and
@@ -263,7 +261,7 @@ and screen.
 
 | Program | Does |
 | --- | --- |
-| `examples/queries.cr` | Asks every query and checks what it can: the cursor against where it was put, the size against `stty size`, the pixel sizes against each other. Asks you to compare the colours with swatches |
+| `examples/queries.cr` | Asks every query and checks what it can: the cursor against where it was put, the size against what the device says, the pixel sizes against each other. Asks you to compare the colours with swatches |
 | `examples/checklist.cr` | Walks through keys, paste, focus, the mouse, the kitty keyboard protocol, modifyOtherKeys and resizing, saying what to do and what should arrive. A failed step offers a retry |
 | `examples/events.cr` | Prints every event and toggles the modes from the keyboard. Judges nothing |
 
@@ -330,7 +328,13 @@ it, so the process dies of what it was sent. `Mode::Event` delivers an `Events::
 on. `Mode::WarnThenExit` delivers one each time and exits on the `#threshold`th, which is what
 "press again to quit" is made of; `#reset_count` clears the tally. A `#on` hook runs instead of the
 modes, for the signals whose answer is neither — `TSTP` gives the terminal back, `CONT` takes it
-again. `TERM`, `INT` and `HUP` default to `Exit` and `WINCH` to `Event`.
+again. `TERM`, `INT` and `HUP` default to `Exit` and `WINCH` to `Event`; on Windows, which has
+neither `HUP` nor `WINCH`, the defaults are `TERM`, `INT` and `BREAK`, all `Exit`.
+
+`WINCH` does not arrive as an `Events::Signal`. The stream measures the window and sends an
+`Events::Resize` with the size it is now and the size it last reported, through `Stream#measure`,
+which is `SizeDetector.detect` unless something knows better. A Windows console reports the change
+with the input rather than as a signal, and it arrives as the same event.
 
 ## Stages
 
@@ -364,8 +368,8 @@ chain it started on. Removing or reordering is a `#replace`:
 stream.stages.replace stream.stages.reject { |stage| stage.name == :drop_motion }
 ```
 
-termbuf answers `SIGWINCH` in a stage called `:resize`, which consumes the signal and sends a
-resize event in its place. `#inject` bypasses the chain.
+termbuf answers `Events::Resize` in a stage called `:resize`, which consumes it, resizes its
+buffer, and injects a resize of its own once the buffer matches. `#inject` bypasses the chain.
 
 ## Decoding without a device
 

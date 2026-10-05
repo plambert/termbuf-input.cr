@@ -1,4 +1,6 @@
 require "./termbuf-input/key"
+require "./termbuf-input/screen_size"
+require "./termbuf-input/raw_mode"
 require "./termbuf-input/utf8"
 require "./termbuf-input/event"
 require "./termbuf-input/mouse"
@@ -56,8 +58,15 @@ module TermBuf
   #
   # Every one of them is usable on its own.
   module Input
+    # Windows runs a macro's command with no shell, and its command line
+    # quotes only with double quotes. A Windows path cannot hold a double
+    # quote, so none needs escaping there.
     {% begin %}
-    {% command = "shards version '" + __DIR__.gsub(%r{'}, "'\\''") + "'" %}
+    {% if flag?(:win32) %}
+      {% command = "shards version \"" + __DIR__ + "\"" %}
+    {% else %}
+      {% command = "shards version '" + __DIR__.gsub(%r{'}, "'\\''") + "'" %}
+    {% end %}
     VERSION = {{ `#{command.id}`.strip.stringify }}
     {% end %}
   end

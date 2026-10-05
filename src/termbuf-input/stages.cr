@@ -16,9 +16,9 @@ module TermBuf
     #
     # Empty by default, which is the useful default: with nothing in it every
     # event goes to the channel as it was made. A driver puts its own
-    # translations here — termbuf answers `SIGWINCH` in a stage called
-    # `:resize`, which consumes the signal and sends a resize event in its
-    # place — and an application adds, removes or reorders them:
+    # translations here — termbuf answers `Events::Resize` in a stage called
+    # `:resize`, which consumes it and injects its own once the buffer has
+    # followed — and an application adds, removes or reorders them:
     #
     #     stream.stages.push Stage.new(:drop_motion, handler)
     #

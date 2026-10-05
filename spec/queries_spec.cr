@@ -115,6 +115,32 @@ Spectator.describe TermBuf::Input::Queries do
     end
   end
 
+  # A Windows console answers the sentinel itself and passes the query on to
+  # the terminal, whose answer comes after. Measured against WezTerm 20240203.
+  it "delivers an answer that comes after the sentinel's reply" do
+    with_conversation do |talk|
+      talk.queries.ask Query::TERMINAL_NAME
+      talk.reply "\e[?61;6;7;22;23;24;28;32;42c"
+      expect(talk.event).to eq Events::Unanswered.new(Query::TERMINAL_NAME)
+
+      talk.reply "\eP>|WezTerm 20240203\e\\"
+      expect(talk.event).to eq Events::TerminalName.new("WezTerm 20240203")
+    end
+  end
+
+  it "leaves an answer that comes too late to the keys" do
+    with_conversation do |talk|
+      talk.queries.late_grace = 10.milliseconds
+      talk.queries.ask Query::CURSOR_POSITION
+      talk.reply "\e[?62c"
+      expect(talk.event).to be_a Events::Unanswered
+
+      sleep 30.milliseconds
+      talk.reply "\e[1;5R"
+      expect(talk.event.as(Events::Key).key.name).to eq TermBuf::Input::Key::Name::F3
+    end
+  end
+
   # With nothing asked, `CSI 1 ; 5 R` is Ctrl+F3, as it always was.
   it "takes nothing with no query out" do
     with_conversation do |talk|

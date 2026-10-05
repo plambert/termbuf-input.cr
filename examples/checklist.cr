@@ -366,23 +366,23 @@ begin
   # ---------------------------------------------------------------- resize
 
   list.step "resize", "Resize this window by dragging its edge, then let go.",
-    "SIGWINCH, and a size that matches stty size" do |event|
-    next unless event.is_a?(Input::Events::Signal) && event.signal.winch?
+    "a resize, and a size that matches the device's" do |event|
+    next unless event.is_a?(Input::Events::Resize)
 
     # Let the drag finish before asking.
     while harness.next_event(700.milliseconds)
     end
 
-    expected = harness.stty_size
+    expected = harness.device_size
     case answer = harness.ask Input::Query::TEXT_AREA_SIZE
     when Input::Events::TextAreaSize
       if {answer.columns, answer.rows} == expected
         {Status::Pass, "#{answer.columns} × #{answer.rows}"}
       else
-        {Status::Fail, "the terminal says #{answer.columns} × #{answer.rows}, stty size says #{expected}"}
+        {Status::Fail, "the terminal says #{answer.columns} × #{answer.rows}, the device says #{expected}"}
       end
     else
-      {Status::Pass, "SIGWINCH arrived; the terminal does not report its size"}
+      {Status::Pass, "a resize arrived; the terminal does not report its size"}
     end
   end
 rescue Harness::Stopped
