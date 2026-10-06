@@ -1,5 +1,16 @@
 require "./spec_helper"
 
+# The next tick on *inbound*, or `nil` if none arrives in time.
+private def next_tick(inbound : Channel(TermBuf::Input::Reader::Inbound),
+                      timeout : Time::Span = 2.seconds) : TermBuf::Input::Timers::Tick?
+  select
+  when message = inbound.receive
+    message.as TermBuf::Input::Timers::Tick
+  when timeout timeout
+    nil
+  end
+end
+
 # A stream over a pipe, so the whole input side runs with no device attached.
 private class Keyboard
   getter stream : TermBuf::Input::Stream
@@ -233,17 +244,20 @@ Spectator.describe TermBuf::Input::Stream do
   # since holding a running dispatcher still long enough to lose the race is
   # not something a spec can arrange.
   context "the timers underneath" do
+    # The tick is taken off the channel before the cancel, which is what
+    # makes the cancel come after the firing. Sleeping past the timer instead
+    # does not: when the OS coalesces the two wake-ups, as macOS does at
+    # background QoS, the sleeper can resume first, cancel a timer that has
+    # not sent yet, and wait forever for a tick that is never coming.
     it "drops a tick whose timer was cancelled after it fired" do
       inbound = Channel(TermBuf::Input::Reader::Inbound).new 4
       timers = TermBuf::Input::Timers.new inbound
       nonce = timers.after 5.milliseconds
 
-      # Long enough that the fibre has woken and sent, and nobody has claimed
-      # the tick, because nothing is reading this channel.
-      sleep 100.milliseconds
+      tick = next_tick inbound
+      fail "the timer never fired" unless tick
       timers.cancel nonce
 
-      tick = inbound.receive.as TermBuf::Input::Timers::Tick
       expect(tick.nonce).to eq nonce
       expect(timers.claim(nonce)).to be_false
     end
@@ -253,8 +267,7 @@ Spectator.describe TermBuf::Input::Stream do
       timers = TermBuf::Input::Timers.new inbound
       nonce = timers.after 5.milliseconds
 
-      sleep 100.milliseconds
-      inbound.receive.as TermBuf::Input::Timers::Tick
+      fail "the timer never fired" unless next_tick inbound
 
       expect(timers.claim(nonce)).to be_true
       expect(timers.claim(nonce)).to be_false
