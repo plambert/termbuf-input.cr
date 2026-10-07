@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-06
+
+### Fixed
+
+- A timer spec could wait forever. It slept past a 5 ms timer, cancelled it, and then read the
+  channel with no timeout; when the OS coalesced the two wake-ups, as macOS does at background QoS
+  and can on a loaded CI runner, the cancel came first and no tick was ever sent. The timer specs
+  now take the tick off the channel, with a time limit, before cancelling. The library is
+  unchanged.
+
 ## [0.7.0] - 2026-10-05
 
 This release runs on Windows, in Windows Terminal and in WezTerm. Both host a program in a Windows
@@ -126,7 +136,8 @@ console, and the console's input is read directly.
   for them from the moment it is built; turning the reporting on belongs to whoever set the
   terminal up.
 
-[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/plambert/termbuf-input.cr/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.1.0...v0.5.0
