@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-20
+
 ### Changed
 
 - Pixel reports are read from zero unless `Stream#pixel_origin` says otherwise. The decoder
@@ -162,7 +164,8 @@ console, and the console's input is read directly.
   for them from the moment it is built; turning the reporting on belongs to whoever set the
   terminal up.
 
-[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/plambert/termbuf-input.cr/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/plambert/termbuf-input.cr/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/plambert/termbuf-input.cr/compare/v0.6.0...v0.7.0
