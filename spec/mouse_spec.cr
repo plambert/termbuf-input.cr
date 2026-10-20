@@ -267,12 +267,12 @@ Spectator.describe TermBuf::Input::Mouse do
     end
   end
 
-  # Under DEC mode 1016 the coordinates are pixels from one, and the cell is
-  # found by dividing.
+  # Under DEC mode 1016 the coordinates are pixels, from zero unless the
+  # decoder is told otherwise, and the cell is found by dividing.
   describe "in pixels" do
     it "puts a cell's first pixel in that cell, at offset zero" do
-      # Pixel 31 from one is pixel 30 from zero: column 3, row 2.
-      event = pixel_report "\e[<0;31;41M"
+      # Pixel 30 from zero: column 3, row 2.
+      event = pixel_report "\e[<0;30;40M"
       fail "nothing decoded" unless event
       pixel = event.pixel
       fail "no pixel" unless pixel
@@ -288,7 +288,7 @@ Spectator.describe TermBuf::Input::Mouse do
     end
 
     it "puts a cell's last pixel in that cell, at the last offset" do
-      event = pixel_report "\e[<0;40;60M"
+      event = pixel_report "\e[<0;39;59M"
       fail "nothing decoded" unless event
       pixel = event.pixel
       fail "no pixel" unless pixel
@@ -301,14 +301,28 @@ Spectator.describe TermBuf::Input::Mouse do
       expect(pixel.fraction_y).to eq 0.95
     end
 
-    it "clamps a zero to pixel zero rather than refusing it" do
-      event = pixel_report "\e[<0;0;0M"
+    it "takes the origin off first for a terminal that numbers from one" do
+      # xterm's pixel 31 is pixel 30 from zero: column 3, row 2, offset zero.
+      event = TermBuf::Input::Mouse.decode TermBuf::Input::Sequence.parse("\e[<0;31;41M".to_slice), CELL, 1
       fail "nothing decoded" unless event
       pixel = event.pixel
       fail "no pixel" unless pixel
 
-      expect({event.x, event.y}).to eq({0, 0})
-      expect({pixel.x, pixel.y}).to eq({0, 0})
+      expect({event.x, event.y}).to eq({3, 2})
+      expect({pixel.x, pixel.y}).to eq({30, 40})
+      expect(pixel.offset_x).to eq 0
+    end
+
+    it "keeps a negative coordinate, in the cell before the first" do
+      # A held button past the left edge on a terminal that does not clamp.
+      event = pixel_report "\e[<32;-1;5M"
+      fail "nothing decoded" unless event
+      pixel = event.pixel
+      fail "no pixel" unless pixel
+
+      expect({event.x, event.y}).to eq({-1, 0})
+      expect({pixel.x, pixel.y}).to eq({-1, 5})
+      expect(pixel.offset_x).to eq 9
     end
 
     it "keeps the button, the modifiers and the action" do
@@ -318,10 +332,6 @@ Spectator.describe TermBuf::Input::Mouse do
       expect(event.button).to eq Button::Left
       expect(event.modifiers).to eq TermBuf::Input::Modifiers::Shift
       expect(event.action).to eq Action::Release
-    end
-
-    it "says nothing about a negative coordinate" do
-      expect(pixel_report("\e[<0;-1;5M")).to be_nil
     end
 
     it "leaves a report in cells without a pixel" do
@@ -412,11 +422,23 @@ Spectator.describe TermBuf::Input::Mouse do
     it "decodes in pixels once the stream has a mouse cell" do
       with_pointer do |pointer|
         pointer.stream.mouse_cell = CELL
-        pointer.send "\e[<0;40;60M"
+        pointer.send "\e[<0;39;59M"
         mouse = pointer.event.as TermBuf::Input::Events::Mouse
 
         expect({mouse.x, mouse.y}).to eq({3, 2})
         expect(mouse.pixel.try &.offset_x).to eq 9
+      end
+    end
+
+    it "takes the stream's pixel origin off" do
+      with_pointer do |pointer|
+        pointer.stream.mouse_cell = CELL
+        pointer.stream.pixel_origin = 1
+        pointer.send "\e[<0;31;41M"
+        mouse = pointer.event.as TermBuf::Input::Events::Mouse
+
+        expect({mouse.x, mouse.y}).to eq({3, 2})
+        expect(mouse.pixel.try &.x).to eq 30
       end
     end
 
@@ -454,7 +476,7 @@ Spectator.describe TermBuf::Input::Mouse do
 
       expect(claim(stream, "\e[<35;31;41M")).to be_a TermBuf::Input::Events::Mouse
       expect(claim(stream, "\e[<35;35;45M")).to be_a TermBuf::Input::Claimed
-      expect(claim(stream, "\e[<35;40;60M")).to be_a TermBuf::Input::Claimed
+      expect(claim(stream, "\e[<35;39;59M")).to be_a TermBuf::Input::Claimed
     end
 
     it "delivers motion into another cell" do

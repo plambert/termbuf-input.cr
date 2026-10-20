@@ -87,7 +87,10 @@ module TermBuf::Input
     #
     # *pixel* is where the pointer is to the pixel, from a report under DEC
     # mode 1016, and `nil` for a report in cells. *x* and *y* are cells either
-    # way, so code that has no use for pixels reads them as it always has.
+    # way, so code that has no use for pixels reads them as it always has. A
+    # report in pixels can put them past the window, negative included, when
+    # a button is held and the terminal does not clamp; a report in cells
+    # cannot.
     record Mouse, button : Input::Mouse::Button, x : Int32, y : Int32,
       modifiers : Modifiers, action : Input::Mouse::Action, pixel : Pixel? = nil do
       include Event
@@ -137,10 +140,12 @@ module TermBuf::Input
 
     # Where the pointer is to the pixel, out of a mouse report in pixels.
     #
-    # *x* and *y* count pixels from the text area's top-left, from zero.
-    # *cell* is the cell size they were divided by to find the cell the event
-    # names, so the offsets and fractions here place the pointer inside that
-    # cell.
+    # *x* and *y* count pixels from the text area's top-left, from zero,
+    # whatever the terminal counts from (see `Stream#pixel_origin`). They go
+    # negative when a terminal that does not clamp reports a held button past
+    # the top or left of the window. *cell* is the cell size they were divided
+    # by to find the cell the event names, so the offsets and fractions here
+    # place the pointer inside that cell, in a negative cell as in any other.
     record Pixel, x : Int32, y : Int32, cell : CellPixels do
       # How many pixels into its cell the pointer is across, in
       # `0...cell.width`.

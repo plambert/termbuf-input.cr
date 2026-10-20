@@ -94,11 +94,14 @@ module TermBuf
       # As `.decode(sequence)`, reading the coordinates as pixels when *cell*
       # is given, as DEC mode 1016 sends them.
       #
-      # Pixels are taken to count from one, as cells do, so one is subtracted
-      # before dividing by the cell size. A zero is clamped to pixel zero
-      # rather than refused, in case a terminal counts from zero. The event's
-      # *x* and *y* are the cell, and its `Events::Mouse#pixel` the pixel.
-      def self.decode(sequence : Input::Sequence, cell : Events::CellPixels?) : Events::Mouse?
+      # *origin* is the number the terminal gives the first pixel, subtracted
+      # before dividing by the cell size: one for xterm, zero for the rest.
+      # See `Stream#pixel_origin`. The event's *x* and *y* are the cell, and
+      # its `Events::Mouse#pixel` the pixel. Neither is refused for being
+      # negative: a terminal that does not clamp reports a held button past
+      # the top or left of the window that way, the release included.
+      def self.decode(sequence : Input::Sequence, cell : Events::CellPixels?,
+                      origin : Int32 = 0) : Events::Mouse?
         return unless sequence.prefix.csi?
 
         body = sequence.body
@@ -116,7 +119,7 @@ module TermBuf
         return unless code && column && row
         return unless code >= 0
 
-        cell ? pixels(code, final, column, row, cell) : cells(code, final, column, row)
+        cell ? pixels(code, final, column, row, cell, origin) : cells(code, final, column, row)
       end
 
       # The event for a report whose coordinates are cells.
@@ -130,13 +133,12 @@ module TermBuf
           modifiers(code), action(code, final)
       end
 
-      # The event for a report whose coordinates are pixels, found by
-      # dividing them by *cell*. A negative coordinate is not a report.
+      # The event for a report whose coordinates are pixels, found by taking
+      # *origin* off and dividing by *cell*. The division floors, so a pixel
+      # past the left edge is in cell -1 rather than cell 0.
       private def self.pixels(code : Int32, final : Char, column : Int32, row : Int32,
-                              cell : Events::CellPixels) : Events::Mouse?
-        return unless column >= 0 && row >= 0
-
-        pixel = Events::Pixel.new (column - 1).clamp(0, nil), (row - 1).clamp(0, nil), cell
+                              cell : Events::CellPixels, origin : Int32) : Events::Mouse?
+        pixel = Events::Pixel.new column - origin, row - origin, cell
 
         Events::Mouse.new button(code), pixel.x // cell.width, pixel.y // cell.height,
           modifiers(code), action(code, final), pixel

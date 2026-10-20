@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Pixel reports are read from zero unless `Stream#pixel_origin` says otherwise. The decoder
+  subtracted one, which is xterm's numbering; ghostty, kitty and iTerm2 number pixels from zero,
+  so every pixel came out one short and the first pixel column of each cell landed in the cell
+  before. `Mouse.decode(sequence, cell, origin)` takes the number to subtract.
+- A negative pixel coordinate is a report, in a negative cell. ghostty and kitty report a held
+  button past the top or left of the window that way, the release included, and the release was
+  being dropped.
+
 ## [0.8.0] - 2026-10-20
 
 ### Added

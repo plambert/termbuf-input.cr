@@ -114,7 +114,7 @@ event reaches the channel it walks the `#stages` chain.
 | `#after(span)`, `#cancel(nonce)` | A timer, in order with the bytes around it |
 | `#inject(event)` | Sends an event without decoding anything, and without the stages |
 | `#stages` | The chain every decoded event walks, a `Stages` |
-| `#mouse_cell`, `#motion_every_pixel?` | Pixel mouse decoding and its motion coalescing. See [Mouse](#mouse) |
+| `#mouse_cell`, `#pixel_origin`, `#motion_every_pixel?` | Pixel mouse decoding and its motion coalescing. See [Mouse](#mouse) |
 | `#patterns`, `#decoder`, `#timers`, `#signals` | The pieces, for registering and for tuning |
 | `#close` | Stops delivering, resets the signal traps, disarms the timers |
 
@@ -175,12 +175,18 @@ stream divides them by `Stream#mouse_cell` to find the cell. A driver sets that 
 enables `Mode::MOUSE_SGR_PIXELS` or `MOUSE_SGR_ANY_PIXELS` and clears it after the reset; termbuf
 does both. `Mode#pixels` names the pixel mode for `MOUSE_SGR` and `MOUSE_SGR_ANY`.
 
+`Stream#pixel_origin` is the number the terminal gives the first pixel, taken off before the
+division: one for xterm, which defined the mode and numbers pixels as it numbers cells, and zero
+for ghostty, kitty and iTerm2, which is the default. A driver sets it once it knows the terminal.
+Nothing is refused for being negative. ghostty and kitty report a held button past the top or left
+of the window with negative pixels, the release included, and those arrive with a negative cell.
+
 `Events::Mouse#pixel` is `nil` for a report in cells. For a report in pixels it is an
 `Events::Pixel`:
 
 | Member | Is |
 | --- | --- |
-| `x`, `y` | pixels from the text area's top-left, from zero |
+| `x`, `y` | pixels from the text area's top-left, from zero, negative past it |
 | `cell` | the `CellPixels` they were divided by |
 | `offset_x`, `offset_y` | pixels into the cell, `0...cell.width` and `0...cell.height` |
 | `fraction_x`, `fraction_y` | the same as a `Float64` in `0.0...1.0` |

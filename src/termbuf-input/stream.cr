@@ -104,6 +104,15 @@ module TermBuf
         @mouse_cell = cell
       end
 
+      # The number the terminal gives the first pixel of its text area, which
+      # the stream subtracts from a pixel report. Zero by default.
+      #
+      # xterm, which defined DEC mode 1016, numbers pixels from one as it
+      # numbers cells. ghostty, kitty and iTerm2 number them from zero, read
+      # from their sources on 2026-10-20. A driver that knows it is talking to
+      # xterm sets this to one before the first pixel report; termbuf does.
+      property pixel_origin : Int32 = 0
+
       # Whether every pixel report of motion reaches the application.
       #
       # `false` by default: a terminal reporting all motion in pixels sends a
@@ -157,7 +166,7 @@ module TermBuf
         end
 
         @patterns.register(Prefix::CSI, head: "<") do |sequence|
-          if mouse = Mouse.decode(sequence, @mouse_cell)
+          if mouse = Mouse.decode(sequence, @mouse_cell, @pixel_origin)
             coalesce mouse
           end
         end
