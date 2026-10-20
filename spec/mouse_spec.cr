@@ -53,6 +53,20 @@ private def with_pointer(&)
   end
 end
 
+# A cell ten pixels wide and twenty high, for the pixel reports.
+private CELL = TermBuf::Input::Events::CellPixels.new(10, 20)
+
+# What the decoder makes of a report in pixels.
+private def pixel_report(text : String) : TermBuf::Input::Events::Mouse?
+  TermBuf::Input::Mouse.decode TermBuf::Input::Sequence.parse(text.to_slice), CELL
+end
+
+# What the stream's `CSI <` pattern makes of *text*, without starting the
+# stream, so a spec decides when the channel holds something.
+private def claim(stream : TermBuf::Input::Stream, text : String) : TermBuf::Input::Event?
+  stream.patterns.match TermBuf::Input::Sequence.parse(text.to_slice)
+end
+
 private def x10(text : String) : TermBuf::Input::Events::Mouse?
   TermBuf::Input::Mouse.decode_x10 TermBuf::Input::Sequence.parse(text.to_slice)
 end
@@ -253,6 +267,73 @@ Spectator.describe TermBuf::Input::Mouse do
     end
   end
 
+  # Under DEC mode 1016 the coordinates are pixels from one, and the cell is
+  # found by dividing.
+  describe "in pixels" do
+    it "puts a cell's first pixel in that cell, at offset zero" do
+      # Pixel 31 from one is pixel 30 from zero: column 3, row 2.
+      event = pixel_report "\e[<0;31;41M"
+      fail "nothing decoded" unless event
+      pixel = event.pixel
+      fail "no pixel" unless pixel
+
+      expect(event.x).to eq 3
+      expect(event.y).to eq 2
+      expect(pixel.x).to eq 30
+      expect(pixel.y).to eq 40
+      expect(pixel.offset_x).to eq 0
+      expect(pixel.offset_y).to eq 0
+      expect(pixel.fraction_x).to eq 0.0
+      expect(pixel.cell).to eq CELL
+    end
+
+    it "puts a cell's last pixel in that cell, at the last offset" do
+      event = pixel_report "\e[<0;40;60M"
+      fail "nothing decoded" unless event
+      pixel = event.pixel
+      fail "no pixel" unless pixel
+
+      expect(event.x).to eq 3
+      expect(event.y).to eq 2
+      expect(pixel.offset_x).to eq 9
+      expect(pixel.offset_y).to eq 19
+      expect(pixel.fraction_x).to eq 0.9
+      expect(pixel.fraction_y).to eq 0.95
+    end
+
+    it "clamps a zero to pixel zero rather than refusing it" do
+      event = pixel_report "\e[<0;0;0M"
+      fail "nothing decoded" unless event
+      pixel = event.pixel
+      fail "no pixel" unless pixel
+
+      expect({event.x, event.y}).to eq({0, 0})
+      expect({pixel.x, pixel.y}).to eq({0, 0})
+    end
+
+    it "keeps the button, the modifiers and the action" do
+      event = pixel_report "\e[<36;15;15m"
+      fail "nothing decoded" unless event
+
+      expect(event.button).to eq Button::Left
+      expect(event.modifiers).to eq TermBuf::Input::Modifiers::Shift
+      expect(event.action).to eq Action::Release
+    end
+
+    it "says nothing about a negative coordinate" do
+      expect(pixel_report("\e[<0;-1;5M")).to be_nil
+    end
+
+    it "leaves a report in cells without a pixel" do
+      event = report "\e[<0;31;41M"
+      fail "nothing decoded" unless event
+
+      expect(event).to eq TermBuf::Input::Events::Mouse.new(
+        Button::Left, 30, 40, TermBuf::Input::Modifiers::None, Action::Press)
+      expect(event.pixel).to be_nil
+    end
+  end
+
   # The stream registers the `CSI <` pattern when it is built, so a report is
   # understood with or without a terminal around it.
   describe "through the stream" do
@@ -318,6 +399,35 @@ Spectator.describe TermBuf::Input::Mouse do
       end
     end
 
+    it "decodes in cells while the stream has no mouse cell" do
+      with_pointer do |pointer|
+        pointer.send "\e[<0;12;7M"
+        mouse = pointer.event.as TermBuf::Input::Events::Mouse
+
+        expect({mouse.x, mouse.y}).to eq({11, 6})
+        expect(mouse.pixel).to be_nil
+      end
+    end
+
+    it "decodes in pixels once the stream has a mouse cell" do
+      with_pointer do |pointer|
+        pointer.stream.mouse_cell = CELL
+        pointer.send "\e[<0;40;60M"
+        mouse = pointer.event.as TermBuf::Input::Events::Mouse
+
+        expect({mouse.x, mouse.y}).to eq({3, 2})
+        expect(mouse.pixel.try &.offset_x).to eq 9
+      end
+    end
+
+    it "refuses a mouse cell with no size" do
+      stream = TermBuf::Input::Stream.new IO::Memory.new, blocking: false
+
+      expect { stream.mouse_cell = TermBuf::Input::Events::CellPixels.new(0, 20) }
+        .to raise_error ArgumentError
+      expect(stream.mouse_cell).to be_nil
+    end
+
     # A pattern answering `nil` is saying "not mine after all", so the sequence
     # carries on to the key decoder rather than being dropped or guessed at.
     it "leaves a CSI < that is not a report to the key decoder" do
@@ -328,6 +438,69 @@ Spectator.describe TermBuf::Input::Mouse do
         expect(event).to be_a TermBuf::Input::Events::Key
         expect(event.as(TermBuf::Input::Events::Key).key.name).to eq TermBuf::Input::Key::Name::Unknown
       end
+    end
+  end
+
+  # Motion in pixels is dropped while it stays in the cell of the last motion
+  # delivered and the channel still holds something. These call the stream's
+  # pattern directly and fill the channel with `#inject`, so nothing races.
+  describe "coalescing" do
+    let(stream) { TermBuf::Input::Stream.new IO::Memory.new, blocking: false }
+    let(waiting) { TermBuf::Input::Events::Focus.new(true) }
+
+    it "drops motion within a cell while the channel is busy" do
+      stream.mouse_cell = CELL
+      stream.inject waiting
+
+      expect(claim(stream, "\e[<35;31;41M")).to be_a TermBuf::Input::Events::Mouse
+      expect(claim(stream, "\e[<35;35;45M")).to be_a TermBuf::Input::Claimed
+      expect(claim(stream, "\e[<35;40;60M")).to be_a TermBuf::Input::Claimed
+    end
+
+    it "delivers motion into another cell" do
+      stream.mouse_cell = CELL
+      stream.inject waiting
+
+      claim stream, "\e[<35;31;41M"
+      moved = claim(stream, "\e[<35;41;41M")
+
+      expect(moved).to be_a TermBuf::Input::Events::Mouse
+      expect(moved.as(TermBuf::Input::Events::Mouse).x).to eq 4
+    end
+
+    it "delivers motion within a cell once the channel is empty" do
+      stream.mouse_cell = CELL
+
+      expect(claim(stream, "\e[<35;31;41M")).to be_a TermBuf::Input::Events::Mouse
+      expect(claim(stream, "\e[<35;35;45M")).to be_a TermBuf::Input::Events::Mouse
+    end
+
+    it "keeps presses, releases and wheel notches" do
+      stream.mouse_cell = CELL
+      stream.inject waiting
+
+      claim stream, "\e[<32;31;41M"
+      expect(claim(stream, "\e[<0;32;41M")).to be_a TermBuf::Input::Events::Mouse
+      expect(claim(stream, "\e[<0;33;41m")).to be_a TermBuf::Input::Events::Mouse
+      expect(claim(stream, "\e[<64;34;41M")).to be_a TermBuf::Input::Events::Mouse
+      expect(claim(stream, "\e[<64;34;41M")).to be_a TermBuf::Input::Events::Mouse
+    end
+
+    it "delivers every motion when motion_every_pixel is set" do
+      stream.mouse_cell = CELL
+      stream.motion_every_pixel = true
+      stream.inject waiting
+
+      3.times do |step|
+        expect(claim(stream, "\e[<35;#{31 + step};41M")).to be_a TermBuf::Input::Events::Mouse
+      end
+    end
+
+    it "leaves reports in cells alone" do
+      stream.inject waiting
+
+      expect(claim(stream, "\e[<35;4;3M")).to be_a TermBuf::Input::Events::Mouse
+      expect(claim(stream, "\e[<35;4;3M")).to be_a TermBuf::Input::Events::Mouse
     end
   end
 end

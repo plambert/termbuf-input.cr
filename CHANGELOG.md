@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Mouse reports in pixels, under DEC mode 1016. `Mode::MOUSE_SGR_PIXELS` and
+  `MOUSE_SGR_ANY_PIXELS` turn them on, and `Mode#pixels` names them for `MOUSE_SGR` and
+  `MOUSE_SGR_ANY`.
+- `Stream#mouse_cell`, the cell size the stream divides pixel coordinates by. While it is set,
+  `Events::Mouse` still carries cells in `x` and `y`, and its new `pixel` carries an
+  `Events::Pixel` with the pixel position, the offset into the cell, and the fraction across it.
+  While it is `nil`, reports decode as before.
+- `Mouse.decode(sequence, cell)`, the decoder with a cell size. `Mouse.decode(sequence)` is
+  unchanged.
+- Pixel motion coalescing. A pixel motion in the cell of the last motion delivered is dropped while
+  the events channel still holds something. `Stream#motion_every_pixel = true` turns this off.
+
 ## [0.7.1] - 2026-10-06
 
 ### Fixed

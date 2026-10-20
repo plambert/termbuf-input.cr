@@ -114,6 +114,7 @@ event reaches the channel it walks the `#stages` chain.
 | `#after(span)`, `#cancel(nonce)` | A timer, in order with the bytes around it |
 | `#inject(event)` | Sends an event without decoding anything, and without the stages |
 | `#stages` | The chain every decoded event walks, a `Stages` |
+| `#mouse_cell`, `#motion_every_pixel?` | Pixel mouse decoding and its motion coalescing. See [Mouse](#mouse) |
 | `#patterns`, `#decoder`, `#timers`, `#signals` | The pieces, for registering and for tuning |
 | `#close` | Stops delivering, resets the signal traps, disarms the timers |
 
@@ -169,6 +170,26 @@ A wheel notch is an `Action::Press` whose button answers `Button#wheel?`, and no
 it. An application that would rather have the bytes unregisters the stream's pattern and puts its
 own on `CSI <`.
 
+`x` and `y` are always cells. Under DEC mode 1016 the terminal reports pixels instead, and the
+stream divides them by `Stream#mouse_cell` to find the cell. A driver sets that property before it
+enables `Mode::MOUSE_SGR_PIXELS` or `MOUSE_SGR_ANY_PIXELS` and clears it after the reset; termbuf
+does both. `Mode#pixels` names the pixel mode for `MOUSE_SGR` and `MOUSE_SGR_ANY`.
+
+`Events::Mouse#pixel` is `nil` for a report in cells. For a report in pixels it is an
+`Events::Pixel`:
+
+| Member | Is |
+| --- | --- |
+| `x`, `y` | pixels from the text area's top-left, from zero |
+| `cell` | the `CellPixels` they were divided by |
+| `offset_x`, `offset_y` | pixels into the cell, `0...cell.width` and `0...cell.height` |
+| `fraction_x`, `fraction_y` | the same as a `Float64` in `0.0...1.0` |
+
+A terminal reporting all motion in pixels sends a report per pixel of travel. The stream drops a
+pixel motion that stays in the cell of the last motion delivered while `#events` still holds
+something. Presses, releases, wheel notches and reports in cells always arrive.
+`Stream#motion_every_pixel = true` delivers every motion.
+
 ## Focus
 
 `Focus.decode` reads a focus report into an `Events::Focus`: `CSI I` when the window gains focus
@@ -192,11 +213,13 @@ sequences for it. The constants are the modes whose effects this shard decodes:
 | `MOUSE_SGR` | SGR mouse reports of press, release and drag, for `Events::Mouse` |
 | `MOUSE_SGR_ANY` | as `MOUSE_SGR`, plus motion with no button held |
 | `MOUSE_SGR_CLICKS` | as `MOUSE_SGR`, without motion |
+| `MOUSE_SGR_PIXELS` | as `MOUSE_SGR`, in pixels (mode 1016). Set `Stream#mouse_cell` first |
+| `MOUSE_SGR_ANY_PIXELS` | as `MOUSE_SGR_ANY`, in pixels |
 | `KITTY_KEYBOARD` | kitty keyboard protocol keys. Set `Decoder#kitty_keyboard?` with it |
 | `MODIFY_OTHER_KEYS` | xterm's `CSI 27 ; m ; c ~` for modified keys it has no other code for |
 
 `Modes` tracks what is on over one output. `#enable` writes nothing for a mode already on, and
-writes the replacement for a mode sharing a name with one that is. The three mouse modes share
+writes the replacement for a mode sharing a name with one that is. The mouse modes all share
 `mouse-sgr`, because the terminal has one tracking mode. `#disable` turns one off, and `#reset`
 turns them all off in the reverse of the order they went on. It is guarded, so a signal hook can
 reset while the application enables something elsewhere.

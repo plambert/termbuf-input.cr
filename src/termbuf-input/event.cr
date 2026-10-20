@@ -84,8 +84,12 @@ module TermBuf::Input
     #
     # A wheel notch is an `Input::Mouse::Action::Press` whose button answers
     # `Input::Mouse::Button#wheel?`, and no release follows it.
+    #
+    # *pixel* is where the pointer is to the pixel, from a report under DEC
+    # mode 1016, and `nil` for a report in cells. *x* and *y* are cells either
+    # way, so code that has no use for pixels reads them as it always has.
     record Mouse, button : Input::Mouse::Button, x : Int32, y : Int32,
-      modifiers : Modifiers, action : Input::Mouse::Action do
+      modifiers : Modifiers, action : Input::Mouse::Action, pixel : Pixel? = nil do
       include Event
     end
 
@@ -129,6 +133,37 @@ module TermBuf::Input
     # Terminal.app do not answer.
     record CellPixels, width : Int32, height : Int32 do
       include Event
+    end
+
+    # Where the pointer is to the pixel, out of a mouse report in pixels.
+    #
+    # *x* and *y* count pixels from the text area's top-left, from zero.
+    # *cell* is the cell size they were divided by to find the cell the event
+    # names, so the offsets and fractions here place the pointer inside that
+    # cell.
+    record Pixel, x : Int32, y : Int32, cell : CellPixels do
+      # How many pixels into its cell the pointer is across, in
+      # `0...cell.width`.
+      def offset_x : Int32
+        x - (x // cell.width) * cell.width
+      end
+
+      # How many pixels into its cell the pointer is down, in
+      # `0...cell.height`.
+      def offset_y : Int32
+        y - (y // cell.height) * cell.height
+      end
+
+      # How far across its cell the pointer is, in `0.0...1.0`, for a widget
+      # that draws finer than a cell.
+      def fraction_x : Float64
+        offset_x / cell.width
+      end
+
+      # How far down its cell the pointer is, in `0.0...1.0`.
+      def fraction_y : Float64
+        offset_y / cell.height
+      end
     end
 
     # What the terminal says about DEC private mode *mode*, in answer to

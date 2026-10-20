@@ -66,3 +66,37 @@ Spectator.describe TermBuf::Input::Modes do
     expect(output.to_s).to be_empty
   end
 end
+
+Spectator.describe TermBuf::Input::Mode do
+  # A driver that knows the cell size enables the sibling in place of the mode
+  # it was asked for, and the shared name makes that a replacement.
+  describe "#pixels" do
+    it "maps MOUSE_SGR to MOUSE_SGR_PIXELS" do
+      expect(Mode::MOUSE_SGR.pixels).to eq Mode::MOUSE_SGR_PIXELS
+    end
+
+    it "maps MOUSE_SGR_ANY to MOUSE_SGR_ANY_PIXELS" do
+      expect(Mode::MOUSE_SGR_ANY.pixels).to eq Mode::MOUSE_SGR_ANY_PIXELS
+    end
+
+    it "has no sibling for MOUSE_SGR_CLICKS" do
+      expect(Mode::MOUSE_SGR_CLICKS.pixels).to be_nil
+    end
+
+    it "has none for a mode that is not the mouse" do
+      expect(Mode::FOCUS_EVENTS.pixels).to be_nil
+      expect(Mode::MOUSE_SGR_PIXELS.pixels).to be_nil
+    end
+
+    it "keeps the name, so enabling one replaces the other" do
+      expect(Mode::MOUSE_SGR_PIXELS.name).to eq Mode::MOUSE_SGR.name
+      expect(Mode::MOUSE_SGR_ANY_PIXELS.name).to eq Mode::MOUSE_SGR.name
+    end
+
+    it "asks about mode 1016" do
+      expect(Mode::MOUSE_SGR_PIXELS.query.try &.request).to eq "\e[?1016$p"
+      expect(Mode::MOUSE_SGR_ANY_PIXELS.set).to eq "\e[?1003h\e[?1016h"
+      expect(Mode::MOUSE_SGR_ANY_PIXELS.reset).to eq "\e[?1016l\e[?1003l"
+    end
+  end
+end

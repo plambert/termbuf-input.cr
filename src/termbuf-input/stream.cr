@@ -84,6 +84,39 @@ module TermBuf
       # as its previous size. The dispatcher's alone.
       @reported : ScreenSize? = nil
 
+      # The cell size to divide mouse coordinates by, set while the terminal
+      # reports the mouse in pixels and `nil` while it reports cells.
+      #
+      # A driver sets this before it enables `Mode::MOUSE_SGR_PIXELS` or
+      # `MOUSE_SGR_ANY_PIXELS`, and clears it once the reset is written, so a
+      # report sent across the switch is read in the units it was sent in.
+      # termbuf does both.
+      getter mouse_cell : Events::CellPixels? = nil
+
+      # Sets `#mouse_cell`. A cell with no width or height cannot divide
+      # anything, so it raises `ArgumentError` here rather than in the
+      # dispatcher.
+      def mouse_cell=(cell : Events::CellPixels?) : Events::CellPixels?
+        if cell && (cell.width <= 0 || cell.height <= 0)
+          raise ArgumentError.new "a mouse cell needs a positive size, not #{cell.width}x#{cell.height}"
+        end
+
+        @mouse_cell = cell
+      end
+
+      # Whether every pixel report of motion reaches the application.
+      #
+      # `false` by default: a terminal reporting all motion in pixels sends a
+      # report for every pixel of travel, and the stream drops a motion that
+      # stays in the cell of the last one it delivered while that one is still
+      # waiting on `#events`. Presses, releases and wheel notches are never
+      # dropped, and neither is anything reported in cells.
+      property? motion_every_pixel : Bool = false
+
+      # The cell of the last pixel report of motion that was delivered. The
+      # dispatcher's alone.
+      @last_motion : {Int32, Int32}? = nil
+
       # Builds a stream over *io*, which nothing is read from until `#start`.
       #
       # *blocking* says whether a read on *io* blocks the thread it runs on. A
@@ -124,8 +157,35 @@ module TermBuf
         end
 
         @patterns.register(Prefix::CSI, head: "<") do |sequence|
-          Mouse.decode sequence
+          if mouse = Mouse.decode(sequence, @mouse_cell)
+            coalesce mouse
+          end
         end
+      end
+
+      # *mouse*, or `Claimed` for a pixel motion not worth delivering.
+      #
+      # A motion is dropped when it is in the same cell as the last motion
+      # delivered and `#events` still holds something. An empty channel means
+      # the application took that motion, so this one goes out with the latest
+      # pixel position. A busy channel means it has not caught up, and one
+      # more report for a cell it has not reached yet only adds to the queue.
+      private def coalesce(mouse : Events::Mouse) : Event
+        return mouse if @motion_every_pixel || !mouse.action.motion? || mouse.pixel.nil?
+
+        cell = {mouse.x, mouse.y}
+        return Claimed.new if cell == @last_motion && !drained?
+
+        @last_motion = cell
+        mouse
+      end
+
+      # Whether `#events` has nothing waiting. `Channel` has no public way to
+      # ask, so this reads its buffer directly; a stale answer costs one
+      # motion delivered or dropped, never a press or a release.
+      private def drained? : Bool
+        queue = @events.@queue
+        queue.nil? || queue.empty?
       end
 
       # Watches for focus reports from the start, for the same reasons as

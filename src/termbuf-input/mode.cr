@@ -10,7 +10,7 @@ module TermBuf
     # and gives it back on the way out, or writes `#set` and `#reset` itself.
     #
     # The *name* is what identity means, not the sequences. The terminal has
-    # one mouse tracking mode, so the three mouse modes share a name, and
+    # one mouse tracking mode, so the mouse modes share a name, and
     # enabling one after another replaces it rather than adding to it.
     #
     # *query* asks whether the terminal supports the mode, through
@@ -48,6 +48,15 @@ module TermBuf
       # terminal does under mode 1000, not for use.
       MOUSE_SGR_CLICKS = new "mouse-sgr", "\e[?1000h\e[?1006h", "\e[?1006l\e[?1000l", Query.mode(1006)
 
+      # As `MOUSE_SGR`, with the coordinates in pixels: mode 1002 with 1016.
+      # The terminal sends pixels only, so the stream needs the cell size in
+      # `Stream#mouse_cell` before this goes on, to find the cell.
+      MOUSE_SGR_PIXELS = new "mouse-sgr", "\e[?1002h\e[?1016h", "\e[?1016l\e[?1002l", Query.mode(1016)
+
+      # As `MOUSE_SGR_ANY`, with the coordinates in pixels: mode 1003 with
+      # 1016. See `MOUSE_SGR_PIXELS`.
+      MOUSE_SGR_ANY_PIXELS = new "mouse-sgr", "\e[?1003h\e[?1016h", "\e[?1016l\e[?1003l", Query.mode(1016)
+
       # The kitty keyboard protocol, which tells apart keys an ordinary
       # terminal reports identically. The set pushes a flag set onto the
       # terminal's own stack and the reset pops it.
@@ -61,6 +70,18 @@ module TermBuf
       # The kitty protocol does the same job better where it is available.
       # Few terminals answer a question about this one, so it has no query.
       MODIFY_OTHER_KEYS = new "modify-other-keys", "\e[>4;2m", "\e[>4m"
+
+      # The mode that reports the same things as this one in pixels, or `nil`
+      # if there is none. A driver that knows the cell size enables this in
+      # place of the mode it was asked for.
+      #
+      # `MOUSE_SGR_CLICKS` has none, since it exists to measure mode 1000.
+      def pixels : Mode?
+        case self
+        when MOUSE_SGR     then MOUSE_SGR_PIXELS
+        when MOUSE_SGR_ANY then MOUSE_SGR_ANY_PIXELS
+        end
+      end
     end
 
     # The modes an application has turned on, and the device it turned them

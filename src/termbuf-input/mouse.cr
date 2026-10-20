@@ -88,6 +88,17 @@ module TermBuf
       # at zero — carries on to the key decoder and arrives as
       # `Key::Name::Unknown`, which beats inventing a click nobody made.
       def self.decode(sequence : Input::Sequence) : Events::Mouse?
+        decode sequence, nil
+      end
+
+      # As `.decode(sequence)`, reading the coordinates as pixels when *cell*
+      # is given, as DEC mode 1016 sends them.
+      #
+      # Pixels are taken to count from one, as cells do, so one is subtracted
+      # before dividing by the cell size. A zero is clamped to pixel zero
+      # rather than refused, in case a terminal counts from zero. The event's
+      # *x* and *y* are the cell, and its `Events::Mouse#pixel` the pixel.
+      def self.decode(sequence : Input::Sequence, cell : Events::CellPixels?) : Events::Mouse?
         return unless sequence.prefix.csi?
 
         body = sequence.body
@@ -105,6 +116,11 @@ module TermBuf
         return unless code && column && row
         return unless code >= 0
 
+        cell ? pixels(code, final, column, row, cell) : cells(code, final, column, row)
+      end
+
+      # The event for a report whose coordinates are cells.
+      private def self.cells(code : Int32, final : Char, column : Int32, row : Int32) : Events::Mouse?
         # The terminal numbers its columns and rows from one; every buffer
         # coordinate in this shard is numbered from zero. This is where the two
         # meet, so a buffer's hit test takes these coordinates as they stand.
@@ -112,6 +128,18 @@ module TermBuf
 
         Events::Mouse.new button(code), column - 1, row - 1,
           modifiers(code), action(code, final)
+      end
+
+      # The event for a report whose coordinates are pixels, found by
+      # dividing them by *cell*. A negative coordinate is not a report.
+      private def self.pixels(code : Int32, final : Char, column : Int32, row : Int32,
+                              cell : Events::CellPixels) : Events::Mouse?
+        return unless column >= 0 && row >= 0
+
+        pixel = Events::Pixel.new (column - 1).clamp(0, nil), (row - 1).clamp(0, nil), cell
+
+        Events::Mouse.new button(code), pixel.x // cell.width, pixel.y // cell.height,
+          modifiers(code), action(code, final), pixel
       end
 
       # What an X10 mouse report says the pointer did, or `nil` if *sequence*
