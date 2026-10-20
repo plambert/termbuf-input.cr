@@ -110,7 +110,7 @@ module TermBuf
             case record.event_type
             when LibTermBufConsole::KEY_EVENT
               key = record.event.key_event
-              next unless (unit = character key)
+              next unless unit = character key
 
               # A held key the console coalesced says how many times.
               Math.max(key.repeat_count.to_i, 1).times { units << unit }
